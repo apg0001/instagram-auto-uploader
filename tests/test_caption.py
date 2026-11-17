@@ -11,7 +11,7 @@ def test_valid_caption_passes():
 
 
 def test_missing_play_link():
-    assert "플레이 링크 없음" in validate("훅 #랩워즈", URL)
+    assert "필수 링크 없음" in validate("훅 #랩워즈", URL)
 
 
 @pytest.mark.parametrize("bad", ["github.com/apg0001/lab-wars", "레포 구경 오세요", "오픈소스로 공개", "소스 코드는"])
