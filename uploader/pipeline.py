@@ -189,7 +189,7 @@ class Pipeline:
                      "code": "docker compose up -d --wait\n→ 브라우저에서 /setup"},
                     {"head": "2. 각 PC에 Collector", "body": "Releases에서 Windows·macOS·Linux 설치 파일, 설정 마법사로 PC 등록"},
                     {"head": "3. 끝", "body": "에이전트를 쓰면 사무실에 캐릭터가 출근합니다"}]}),
-                ("notes", {**c, "title": "GitHub에서 받아 가세요", "lead": "아직 0.1.0 베타입니다. 검증한 조합과 미검증 범위는 README에 그대로 적어 두었어요.",
+                ("notes", {**c, "title": "GitHub에서 받아 가세요", "lead": "MIT 라이선스라 누구나 가져가 쓰고 고칠 수 있어요. 아직 0.1.0 베타라 검증한 조합과 미검증 범위는 README에 그대로 적어 두었어요.",
                            "items": [], "cta_label": "레포", "cta": repo_short}),
             ]
             media = render(slides, out)
