@@ -10,6 +10,7 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501"]  # 한국어 프롬프트·문구는 줄을 억지로 자르지 않는다
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
