@@ -21,17 +21,38 @@ class CaptionError(RuntimeError):
     pass
 
 
+def link_of(src: dict[str, Any]) -> str:
+    """게시물에 꼭 들어가야 하는 링크 (게임: 플레이 링크, 레포 소개: 레포 주소)."""
+    return src["repo_url"] if src.get("mode") == "repo" else src["play_url"]
+
+
 def build_prompt(src: dict[str, Any], kind: str, scene: str, slides: list[str], recent: list[str]) -> str:
     facts = "\n".join(f"- {f}" for f in src["facts"])
     slide_txt = "\n".join(f"{i + 1}. {s}" for i, s in enumerate(slides)) or "(없음)"
     recent_txt = "\n---\n".join(c[:400] for c in recent) or "(없음)"
-    kind_ko = {"REELS": "릴스(짧은 플레이 영상)", "CAROUSEL": "캐러셀(이미지 여러 장)", "STORIES": "스토리"}.get(kind, kind)
-    return f"""너는 인디 게임 개발자의 인스타그램 계정 캡션을 쓰는 사람이다. 아래 게임을 소개하는 {kind_ko} 게시물 캡션을 한국어로 써라.
+    kind_ko = {"REELS": "릴스(짧은 데모 영상)", "CAROUSEL": "캐러셀(카드뉴스 여러 장)", "STORIES": "스토리"}.get(kind, kind)
+    if src.get("mode") == "repo":
+        who = "오픈소스 개발 도구를 만드는 개발자"
+        subject = "프로젝트"
+        rules = f"""- 첫 줄은 개발자가 공감할 짧은 훅. 과장 광고 말투는 피한다.
+- 본문 4~7줄. 무엇을 해 주는지, 어떻게 쓰는지(설치 흐름), 개인정보·셀프 호스팅 같은 특징 중 2~3개를 구체적으로. 위 사실에 없는 기능·수치를 지어내지 않는다.
+- 레포 링크 줄을 꼭 넣는다: "▶ GitHub: {src['repo_url']}" (프로필 링크에도 있다고 덧붙인다).
+- 아직 베타라는 점을 솔직하게 한 줄 넣는다.
+- 마지막 줄에 해시태그 8~15개 (#{src['hashtag']} 포함, 개발·AI 코딩 관련)."""
+    else:
+        who = "인디 게임 개발자"
+        subject = "게임"
+        rules = f"""- 첫 줄은 스크롤을 멈추게 하는 짧은 훅. 대학원생·연구실 공감 유머 톤, 과장 광고 말투는 피한다.
+- 본문 3~6줄. 이번 장면과 게임 특징 1~2개만 골라 구체적으로. 위 사실에 없는 기능을 지어내지 않는다.
+- 플레이 링크 줄을 꼭 넣는다: "▶ 플레이: {src['play_url']}" (모바일 가로 화면 추천, 설치 없이 브라우저에서).
+- GitHub 저장소, 레포, 소스코드, 오픈소스, 개발 과정 이야기는 절대 쓰지 않는다. 게임만 소개한다.
+- 마지막 줄에 해시태그 8~15개 (한국어 위주, #{src.get('hashtag', '랩워즈')} 포함)."""
+    return f"""너는 {who}의 인스타그램 계정 캡션을 쓰는 사람이다. 아래 {subject}를 소개하는 {kind_ko} 게시물 캡션을 한국어로 써라.
 
-# 게임
+# {subject}
 이름: {src['title']}
 한 줄 소개: {src['tagline']}
-플레이 링크: {src['play_url']}
+링크: {link_of(src)}
 {facts}
 
 # 이번 게시물
@@ -43,18 +64,14 @@ def build_prompt(src: dict[str, Any], kind: str, scene: str, slides: list[str], 
 {recent_txt}
 
 # 규칙
-- 첫 줄은 스크롤을 멈추게 하는 짧은 훅. 대학원생·연구실 공감 유머 톤, 과장 광고 말투는 피한다.
-- 본문 3~6줄. 이번 장면과 게임 특징 1~2개만 골라 구체적으로. 위 사실에 없는 기능을 지어내지 않는다.
-- 플레이 링크 줄을 꼭 넣는다: "▶ 플레이: {src['play_url']}" (모바일 가로 화면 추천, 설치 없이 브라우저에서).
-- GitHub 저장소, 레포, 소스코드, 오픈소스, 개발 과정 이야기는 절대 쓰지 않는다. 게임만 소개한다.
-- 마지막 줄에 해시태그 8~15개 (한국어 위주, #랩워즈 포함).
+{rules}
 - 이모지는 3개 이하.
 - 전체 1200자 이내.
 
 출력은 JSON 객체 하나만, 다른 말 없이: {{"caption": "..."}}"""
 
 
-def validate(caption: str, play_url: str) -> list[str]:
+def validate(caption: str, link: str, allow_repo: bool = False) -> list[str]:
     problems = []
     if not caption.strip():
         problems.append("빈 캡션")
@@ -62,23 +79,34 @@ def validate(caption: str, play_url: str) -> list[str]:
         problems.append(f"{MAX_CAPTION}자 초과")
     if caption.count("#") > MAX_HASHTAGS:
         problems.append(f"해시태그 {MAX_HASHTAGS}개 초과")
-    if play_url.rstrip("/") not in caption:
-        problems.append("플레이 링크 없음")
-    for pat in BANNED:
+    if link.rstrip("/") not in caption:
+        problems.append("필수 링크 없음")
+    for pat in [] if allow_repo else BANNED:
         m = pat.search(caption)
         if m:
             problems.append(f"금지 표현: {m.group(0)}")
     return problems
 
 
-def parse(output: str) -> str:
+def parse_json(output: str) -> dict[str, Any]:
+    """모델 출력에서 가장 바깥 JSON 객체를 꺼낸다 (앞뒤 설명·코드펜스 무시)."""
     m = re.search(r"\{.*\}", output, re.S)
     if not m:
         raise CaptionError(f"JSON을 찾지 못함: {output[:300]}")
     try:
-        return json.loads(m.group(0))["caption"].strip()
-    except (json.JSONDecodeError, KeyError) as e:
+        data = json.loads(m.group(0))
+    except json.JSONDecodeError as e:
         raise CaptionError(f"JSON 파싱 실패: {e}: {output[:300]}") from e
+    if not isinstance(data, dict):
+        raise CaptionError(f"JSON 객체가 아님: {output[:300]}")
+    return data
+
+
+def parse(output: str) -> str:
+    data = parse_json(output)
+    if not isinstance(data.get("caption"), str):
+        raise CaptionError(f"caption 키 없음: {output[:300]}")
+    return data["caption"].strip()
 
 
 def call_claude(prompt: str, cfg: dict[str, Any]) -> str:
@@ -100,7 +128,7 @@ def generate(src: dict[str, Any], cfg: dict[str, Any], kind: str, scene: str, sl
     last: list[str] = []
     for _ in range(attempts):
         caption = parse(call_claude(prompt, cfg))
-        last = validate(caption, src["play_url"])
+        last = validate(caption, link_of(src), allow_repo=src.get("mode") == "repo")
         if not last:
             return caption
         prompt += "\n\n# 직전 결과의 문제 (고쳐서 다시)\n- " + "\n- ".join(last)

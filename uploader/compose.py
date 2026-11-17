@@ -107,19 +107,21 @@ class ReelText:
 VIDEO_Y = 640  # 1080x608 게임 화면이 놓이는 y
 
 
-def reel_overlay(t: ReelText, out: Path) -> Path:
+def reel_overlay(t: ReelText, out: Path, video_h: int = 608, colors: dict | None = None) -> Path:
+    """video_h: 가운데 들어갈 영상 높이(폭 1080 기준). colors로 배경·글자색을 바꿀 수 있다."""
+    c = {"bg": BG, "ink": INK, "sub": SUB, "card": CARD, **(colors or {})}
     W, H = 1080, 1920
-    img = Image.new("RGB", (W, H), BG)
+    img = Image.new("RGB", (W, H), c["bg"])
     d = ImageDraw.Draw(img)
     y = chip(d, t.label, W // 2, 190)
-    y = text_block(d, t.title, font(120), y + 36, INK, 980, W, 1.15)
-    text_block(d, t.subtitle, font(46, bold=False), y + 10, SUB, 960, W)
+    y = text_block(d, t.title, font(120), y + 36, c["ink"], 980, W, 1.32)
+    text_block(d, t.subtitle, font(46, bold=False), y + 10, c["sub"], 960, W)
     # 영상 자리 (가장자리 그림자)
-    d.rounded_rectangle((20, VIDEO_Y - 20, W - 20, VIDEO_Y + 608 + 20), radius=36, fill=CARD)
-    y = VIDEO_Y + 608 + 70
-    y = text_block(d, t.scene, font(48), y, INK, 960, W)
+    d.rounded_rectangle((20, VIDEO_Y - 20, W - 20, VIDEO_Y + video_h + 20), radius=36, fill=c["card"])
+    y = VIDEO_Y + video_h + 70
+    y = text_block(d, t.scene, font(48), y, c["ink"], 960, W)
     # 하단 ~20%는 인스타 UI(캡션·버튼)에 가려지므로 안내 문구는 그 위에 둔다.
-    text_block(d, t.cta, font(42, bold=False), y + 50, SUB, 960, W)
+    text_block(d, t.cta, font(42, bold=False), y + 50, c["sub"], 960, W)
     img.save(out)
     return out
 
@@ -130,15 +132,24 @@ def run_ffmpeg(args: list[str]) -> None:
         raise RuntimeError(f"ffmpeg 실패: {proc.stderr[-2000:]}")
 
 
-def make_reel(raw_video: Path, start: float, seconds: float, overlay: Path, out: Path) -> Path:
+def video_height(crop: tuple[int, int, int, int] | None) -> int:
+    """폭 1080으로 맞췄을 때 영상 높이 (짝수)."""
+    if not crop:
+        return 608
+    return int(round(1080 * crop[3] / crop[2] / 2) * 2)
+
+
+def make_reel(raw_video: Path, start: float, seconds: float, overlay: Path, out: Path,
+              crop: tuple[int, int, int, int] | None = None) -> Path:
     """원본 녹화에서 전투 구간을 잘라 세로 릴스로 만든다. 무음 오디오 트랙을 넣는다."""
     fade_out = max(0.0, seconds - 0.6)
+    crop_filter = f"crop={crop[2]}:{crop[3]}:{crop[0]}:{crop[1]}," if crop else ""
     run_ffmpeg([
         "-ss", f"{start:.2f}", "-t", f"{seconds:.2f}", "-i", str(raw_video),
         "-loop", "1", "-i", str(overlay),
         "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
         "-filter_complex",
-        f"[0:v]fps=30,scale=1080:608:flags=lanczos,setsar=1[g];"
+        f"[0:v]fps=30,{crop_filter}scale=1080:{video_height(crop)}:flags=lanczos,setsar=1[g];"
         f"[1:v]fps=30,format=yuv420p[bg];"
         f"[bg][g]overlay=0:{VIDEO_Y}:shortest=1,fade=t=in:st=0:d=0.4,fade=t=out:st={fade_out:.2f}:d=0.6[v]",
         "-map", "[v]", "-map", "2:a", "-t", f"{seconds:.2f}",

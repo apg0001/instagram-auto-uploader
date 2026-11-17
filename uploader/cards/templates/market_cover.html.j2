@@ -6,9 +6,10 @@
   body.day-down { background: var(--down-wash); }
   .kicker { margin-top: 72px; font-size: 36px; font-weight: 700; }
   .headline { font-size: 86px; font-weight: 900; line-height: 1.1; letter-spacing: -0.045em; margin-top: 18px; word-break: keep-all; }
-  .board { margin-top: 56px; display: grid; grid-template-columns: repeat({{ boards|length }}, 1fr); gap: 0; border-top: 3px solid var(--ink); }
+  .board { margin-top: 56px; display: grid; grid-template-columns: repeat({{ cols|default(boards|length) }}, 1fr); gap: 0; border-top: 3px solid var(--ink); }
   .cell { padding: 26px 0 22px; border-bottom: 2px solid var(--rule); }
-  .cell + .cell { padding-left: 28px; border-left: 2px solid var(--rule); }
+  .cell:not(:nth-child({{ cols|default(boards|length) }}n+1)) { padding-left: 28px; border-left: 2px solid var(--rule); }
+  {% if cols is defined and cols == 2 %}.cell:last-child:nth-child(odd) { grid-column: 1 / -1; }{% endif %}
   .cell .n { font-size: 28px; font-weight: 600; color: var(--muted); }
   .cell .v { font-size: 58px; font-weight: 800; letter-spacing: -0.03em; margin-top: 4px; }
   .cell .c { font-size: 32px; font-weight: 700; margin-top: 2px; }

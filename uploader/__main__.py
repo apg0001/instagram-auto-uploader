@@ -6,6 +6,7 @@ import fcntl
 import logging
 import sys
 from datetime import datetime
+from pathlib import Path
 
 from . import config
 from .db import APPROVED, REJECTED
@@ -15,9 +16,20 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="uploader", description="인스타그램 자동 업로더")
     sub = ap.add_subparsers(dest="cmd", required=True)
     g = sub.add_parser("generate", help="게시물 초안 생성 (녹화·합성·캡션·미디어 업로드·노션 등록)")
-    g.add_argument("--source", default="lab-wars")
+    g.add_argument("--source", default="lab-wars",
+                   help="lab-wars | agent-office | market:premarket | market:close | market:weekly | market:monthly")
     g.add_argument("--kind", choices=["REELS", "CAROUSEL", "STORIES"])
     g.add_argument("--stage", help="예: 3-10")
+    tp = sub.add_parser("topic", help="주제를 조사해 카드뉴스 초안 생성 (claude -p + 웹 검색)")
+    tp.add_argument("topic", help="예: '이번 주 AI 반도체 이슈 정리'")
+    tp.add_argument("--design", choices=["template", "free"], default="template",
+                    help="free: 공개 디자인 스킬을 지침으로 Claude가 HTML을 직접 디자인")
+    pp = sub.add_parser("post", help="준비된 이미지·영상과 캡션으로 바로 초안 생성")
+    pp.add_argument("files", nargs="+", type=Path)
+    pp.add_argument("--title", required=True)
+    cap = pp.add_mutually_exclusive_group(required=True)
+    cap.add_argument("--caption")
+    cap.add_argument("--caption-file", type=Path)
     sub.add_parser("sync", help="노션 승인 결과를 가져와 승인 건 게시")
     sub.add_parser("list", help="게시물 목록")
     for name in ("approve", "reject"):
@@ -44,8 +56,17 @@ def main(argv: list[str] | None = None) -> int:
     from .pipeline import Pipeline  # Playwright 등 무거운 import는 필요할 때만
     pl = Pipeline(cfg)
 
-    if args.cmd == "generate":
-        post = pl.generate(args.source, args.kind, args.stage)
+    if args.cmd in ("generate", "topic", "post"):
+        if args.cmd == "generate":
+            post = pl.generate(args.source, args.kind, args.stage)
+        elif args.cmd == "topic":
+            post = pl.generate_topic(args.topic, args.design)
+        else:
+            text = args.caption if args.caption is not None else args.caption_file.read_text(encoding="utf-8")
+            post = pl.post_manual(args.title, text, args.files)
+        if post is None:
+            print("오늘은 만들 게시물이 없음 (휴장일 등)")
+            return 0
         print(f"{post.id}\n{post.caption}\n" + "\n".join(m["url"] for m in post.media))
     elif args.cmd == "sync":
         pl.sync()
