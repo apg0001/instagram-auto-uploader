@@ -54,14 +54,8 @@ class Pipeline:
             media=[{"file": str(f), "url": u, "type": t} for f, u, t in zip(media, urls, types, strict=False)],
             meta={**(meta or {}), "cover_url": urls[-1] if cover else None},
         )
-        if self.notion:
-            db_id = self.db.kv_get("notion_db_id")
-            if db_id:
-                preview = ([post.meta["cover_url"]] if cover else []) + [m["url"] for m in post.media]
-                post.notion_page_id = self.notion.create_post(db_id, post, preview)
-            else:
-                log.warning("노션 DB가 아직 없음 → `notion-setup` 먼저 실행")
-        self.db.save(post)
+        self.db.save(post)  # 노션이 실패해도 초안은 남긴다 (sync가 다시 올림)
+        self.push_to_notion([post])
         log.info("초안 생성 완료 %s", pid)
         return post
 
@@ -338,7 +332,29 @@ class Pipeline:
                 self.set_status(p, REJECTED, error="게시 기한이 지나 자동 반려")
                 log.info("기한 지남 → 반려 %s", p.id)
 
+    def push_to_notion(self, posts: list[Post] | None = None) -> int:
+        """노션 페이지가 아직 없는 초안·승인 건을 노션에 올린다. 실패해도 다음 sync에서 다시 시도."""
+        if not self.notion:
+            return 0
+        db_id = self.db.kv_get("notion_db_id")
+        if not db_id:
+            log.warning("노션 DB가 아직 없음 → `notion-setup` 먼저 실행")
+            return 0
+        pushed = 0
+        for p in posts if posts is not None else self.db.by_status(DRAFT, APPROVED):
+            if p.notion_page_id:
+                continue
+            try:
+                preview = ([p.meta["cover_url"]] if p.meta.get("cover_url") else []) + [m["url"] for m in p.media]
+                p.notion_page_id = self.notion.create_post(db_id, p, preview)
+                self.db.save(p)
+                pushed += 1
+            except Exception:  # noqa: BLE001 — 노션 장애가 생성·게시를 막지 않게
+                log.exception("노션 등록 실패 %s (다음 sync에서 재시도)", p.id)
+        return pushed
+
     def sync(self) -> None:
+        self.push_to_notion()
         self.pull_decisions()
         self.expire_stale()
         self.publish_approved()
