@@ -1,0 +1,14 @@
+# 설치: crontab deploy/crontab   (기존 crontab이 있으면 합쳐서 넣을 것)
+# claude(~/.local/bin)를 찾을 수 있게 PATH를 지정한다.
+PATH=/home/gichan/.local/bin:/usr/local/bin:/usr/bin:/bin
+CRON_TZ=Asia/Seoul
+APP=/home/gichan/instagram-auto-uploader
+
+# 하루 2번 초안 생성 → 노션에서 승인하면 게시된다
+0 9,18 * * *  cd $APP && .venv/bin/python -m uploader generate >> data/cron.log 2>&1
+# 5분마다 노션 승인 결과 반영 + 승인 건 게시
+*/5 * * * *   cd $APP && .venv/bin/python -m uploader sync >> data/cron.log 2>&1
+# 매일 새벽 보존 기한(7일) 지난 미디어 삭제
+30 4 * * *    cd $APP && .venv/bin/python -m uploader cleanup >> data/cron.log 2>&1
+# 매주 월요일 인스타 장기 토큰 갱신 (연동 전에는 아무것도 안 함)
+0 5 * * 1     cd $APP && .venv/bin/python -m uploader refresh-token >> data/cron.log 2>&1
