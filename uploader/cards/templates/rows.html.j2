@@ -1,0 +1,30 @@
+{% extends "base.html.j2" %}
+{# 종목 표: 이름 · 가격 · 등락률, 근거가 있으면 아래 한 줄. 순위가 의미 있을 때만 번호. #}
+{% block style %}
+  .table { margin-top: 34px; border-top: 3px solid var(--ink); }
+  .r { display: grid; grid-template-columns: {% if ranked %}56px {% endif %}1fr 190px 210px; align-items: baseline; column-gap: 16px; padding: 16px 0 14px; border-bottom: 1px solid var(--rule); }
+  .rank { font-size: 28px; font-weight: 800; color: var(--muted); }
+  .nm { font-size: 33px; font-weight: 700; word-break: keep-all; line-height: 1.2; }
+  .nm small { font-size: 21px; font-weight: 500; color: var(--muted); margin-left: 8px; }
+  .px { font-size: 30px; font-weight: 600; text-align: right; }
+  .pc { white-space: nowrap; font-size: 32px; font-weight: 800; text-align: right; }
+  .why { grid-column: {% if ranked %}2{% else %}1{% endif %} / -1; font-size: 22px; line-height: 1.45; opacity: .8; margin-top: 8px; word-break: keep-all; }
+  .why em { font-style: normal; color: var(--muted); }
+  .empty { margin-top: 40px; font-size: 28px; color: var(--muted); }
+{% endblock %}
+{% block content %}
+  <h1>{{ title }}</h1>
+  {% if subtitle %}<h2>{{ subtitle }}</h2>{% endif %}
+  <div class="table">
+    {% for it in items %}
+    <div class="r">
+      {% if ranked %}<div class="rank">{{ loop.index }}</div>{% endif %}
+      <div class="nm">{{ it.name }}{% if it.tag %}<small>{{ it.tag }}</small>{% endif %}</div>
+      <div class="px">{{ it.price_text }}</div>
+      <div class="pc {{ it.pct|tone }}">{{ it.pct|pct }}</div>
+      {% if it.reason %}<div class="why">{{ it.reason }}{% if it.source %} <em>{{ it.source }}</em>{% endif %}</div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% if not items %}<div class="empty">조건에 맞는 종목이 없습니다.</div>{% endif %}
+{% endblock %}

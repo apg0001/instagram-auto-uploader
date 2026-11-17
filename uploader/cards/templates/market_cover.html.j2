@@ -1,0 +1,44 @@
+{% extends "base.html.j2" %}
+{# 표지: 과감함은 여기 한 곳. 그날 시장 방향(day_tone)으로 배경을 물들인다. #}
+{% block bodyclass %}day-{{ day_tone }}{% endblock %}
+{% block style %}
+  body.day-up { background: var(--up-wash); }
+  body.day-down { background: var(--down-wash); }
+  .kicker { margin-top: 72px; font-size: 36px; font-weight: 700; }
+  .headline { font-size: 86px; font-weight: 900; line-height: 1.1; letter-spacing: -0.045em; margin-top: 18px; word-break: keep-all; }
+  .board { margin-top: 56px; display: grid; grid-template-columns: repeat({{ boards|length }}, 1fr); gap: 0; border-top: 3px solid var(--ink); }
+  .cell { padding: 26px 0 22px; border-bottom: 2px solid var(--rule); }
+  .cell + .cell { padding-left: 28px; border-left: 2px solid var(--rule); }
+  .cell .n { font-size: 28px; font-weight: 600; color: var(--muted); }
+  .cell .v { font-size: 58px; font-weight: 800; letter-spacing: -0.03em; margin-top: 4px; }
+  .cell .c { font-size: 32px; font-weight: 700; margin-top: 2px; }
+  .chart { margin-top: 34px; }
+  .chart .lbl { font-size: 24px; color: var(--muted); font-weight: 500; margin-bottom: 8px; }
+  .summary { margin-top: 34px; font-size: 31px; line-height: 1.55; font-weight: 500; word-break: keep-all; max-width: 900px; }
+{% endblock %}
+{% block content %}
+  <div class="kicker">{{ kicker }}</div>
+  <div class="headline">{{ headline }}</div>
+  <div class="board">
+    {% for b in boards %}
+    <div class="cell">
+      <div class="n">{{ b.name }}</div>
+      <div class="v">{{ b.value }}</div>
+      <div class="c {{ b.pct|tone }}">{{ b.pct|pct }}{% if b.extra %} <span class="flat" style="font-weight:500">{{ b.extra }}</span>{% endif %}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% if spark %}
+  {% set s = sparkline(spark, 920, 170) %}
+  <div class="chart">
+    <div class="lbl">{{ spark_label }}</div>
+    <svg width="920" height="170" viewBox="0 0 920 170">
+      <line x1="0" x2="920" y1="{{ s.base_y }}" y2="{{ s.base_y }}" stroke="var(--rule)" stroke-width="2" stroke-dasharray="6 8"/>
+      <polygon points="{{ s.area }}" fill="var(--{{ day_tone if day_tone != 'flat' else 'muted' }})" opacity="0.10"/>
+      <polyline points="{{ s.points }}" fill="none" stroke="var(--{{ day_tone if day_tone != 'flat' else 'muted' }})" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="{{ s.last[0] }}" cy="{{ s.last[1] }}" r="9" fill="var(--{{ day_tone if day_tone != 'flat' else 'muted' }})"/>
+    </svg>
+  </div>
+  {% endif %}
+  <div class="summary">{{ summary }}</div>
+{% endblock %}

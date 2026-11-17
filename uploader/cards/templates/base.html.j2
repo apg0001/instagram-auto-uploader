@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: "Pretendard"; font-weight: 400; src: url("{{ fonts }}/Pretendard-Regular.woff2") format("woff2"); }
+  @font-face { font-family: "Pretendard"; font-weight: 500; src: url("{{ fonts }}/Pretendard-Medium.woff2") format("woff2"); }
+  @font-face { font-family: "Pretendard"; font-weight: 600; src: url("{{ fonts }}/Pretendard-SemiBold.woff2") format("woff2"); }
+  @font-face { font-family: "Pretendard"; font-weight: 700; src: url("{{ fonts }}/Pretendard-Bold.woff2") format("woff2"); }
+  @font-face { font-family: "Pretendard"; font-weight: 800; src: url("{{ fonts }}/Pretendard-ExtraBold.woff2") format("woff2"); }
+  @font-face { font-family: "Pretendard"; font-weight: 900; src: url("{{ fonts }}/Pretendard-Black.woff2") format("woff2"); }
+
+  :root {
+    --paper: #EEF0F3;      /* 차가운 회색 종이 */
+    --surface: #FFFFFF;
+    --ink: #20242B;
+    --muted: #6E7787;
+    --rule: #D3D8E0;
+    --up: #D7261E;         /* 국내 시세 관습: 상승 빨강 */
+    --down: #1C56D1;       /* 하락 파랑 */
+    --up-wash: #FBE3E1;
+    --down-wash: #E1E9FB;
+  }
+  {% if theme %}:root { {% for k, v in theme.items() %}--{{ k }}: {{ v }}; {% endfor %}}{% endif %}
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1080px; height: 1350px; overflow: hidden; }
+  body {
+    font-family: "Pretendard", sans-serif; color: var(--ink); background: var(--paper);
+    font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; letter-spacing: -0.01em;
+  }
+  .page { position: relative; width: 1080px; height: 1350px; padding: 84px 80px 0; display: flex; flex-direction: column; }
+  .meta { display: flex; justify-content: space-between; align-items: baseline; font-size: 26px; color: var(--muted); font-weight: 500; }
+  .meta b { color: var(--ink); font-weight: 700; }
+  h1 { font-size: 64px; font-weight: 800; line-height: 1.18; letter-spacing: -0.03em; margin-top: 36px; }
+  h2 { font-size: 34px; font-weight: 500; color: var(--muted); line-height: 1.4; margin-top: 14px; }
+  .up { color: var(--up); } .down { color: var(--down); } .flat { color: var(--muted); }
+  .fit { display: flex; flex-direction: column; }
+  .foot {
+    position: absolute; left: 80px; right: 80px; bottom: 52px; display: flex; justify-content: space-between;
+    font-size: 21px; color: var(--muted); border-top: 2px solid var(--rule); padding-top: 18px;
+  }
+  {% block style %}{% endblock %}
+</style>
+</head>
+<body class="{% block bodyclass %}{% endblock %}">
+<div class="page">
+  <div class="meta"><span><b>{{ brand }}</b>  {{ report_name }}</span><span>{{ date_label }}</span></div>
+  <main class="fit">{% block content %}{% endblock %}</main>
+  <div class="foot">
+    <span>{{ footnote }}</span>
+    <span>{{ page_no }} / {{ page_total }}</span>
+  </div>
+</div>
+<script>
+  // 내용이 하단 문구를 침범하면 넘치지 않을 때까지 본문을 조금씩 줄인다 (최소 70%).
+  window.fit = function fit() {
+    const main = document.querySelector('.fit'), foot = document.querySelector('.foot');
+    const limit = () => foot.getBoundingClientRect().top - 24;
+    let z = 1; main.style.zoom = 1;
+    while (main.getBoundingClientRect().bottom > limit() && z > 0.7) { z -= 0.03; main.style.zoom = z; }
+    document.body.dataset.zoom = z.toFixed(2);
+  };
+  window.fit();
+</script>
+</body>
+</html>
