@@ -1,0 +1,63 @@
+# 인스타그램 자동 업로더 설정
+# 비밀 값(토큰)은 .env 에 둔다. (.env.example 참고)
+
+timezone: Asia/Seoul
+data_dir: data            # 생성물·SQLite 상태가 쌓이는 곳
+
+media:
+  repo_dir: media-repo                       # apg0001/ig-media 로컬 클론
+  pages_base: https://apg0001.github.io/ig-media
+  retention_days: 7                          # 게시(또는 반려) 후 며칠 뒤 삭제할지
+  pages_wait_seconds: 600                    # 푸시 후 Pages 반영을 기다리는 최대 시간
+
+instagram:
+  # 연동 전에는 false. true로 바꾸고 .env에 IG_USER_ID / IG_ACCESS_TOKEN 을 넣으면 실제 게시한다.
+  enabled: false
+  api_version: v24.0
+
+notion:
+  # .env에 NOTION_TOKEN 이 있으면 자동으로 켜진다. DB id는 `notion-setup` 이 상태 DB에 저장한다.
+  api_version: "2022-06-28"
+
+caption:
+  command: [claude, -p, --no-session-persistence, --output-format, text]
+  model: null           # 예: sonnet / haiku. null이면 Claude Code 기본 모델
+  timeout_seconds: 300
+
+# 콘텐츠 소스. 게시물에는 레포(GitHub 저장소)를 언급하지 않고 게임만 소개한다.
+sources:
+  lab-wars:
+    title: 랩워즈 (Lab Wars)
+    play_url: https://apg0001.github.io/lab-wars/
+    tagline: 교수님에게서 연구실을 지켜라!
+    facts:
+      - 모바일 웹에서 가로 화면으로 플레이하는 횡스크롤 라인 디펜스 게임. 설치 없이 브라우저에서 바로, 홈 화면 설치(PWA)·오프라인 플레이도 된다.
+      - 카페인을 모아 연구실 동료를 내보내고, 교수님이 쏟아내는 잡무 군단을 밀어내 교수실을 함락하는 게 목표.
+      - 아군 12종. 학부 → 석사 → 박사로 진화하는 연구실 사람들, 연구용 드론(공중), GPU 서버(공성), AI 조수 패러디 유닛(클로디·코덱시·재미나이).
+      - 적 10종과 보스 7종. 잡무 쪽지, 회의 소환장부터 리뷰어 2, 학회장님, 심사위원장님, 학과장님, 최종 보스 총장님까지.
+      - 학부생 → 학연생 → 학석사 → 석사 → 석박 → 박사 → 포닥, 7챕터 70스테이지. 방학·춘하추동 학회·졸업논문 이벤트 스테이지.
+      - 스테이지마다 움직이는 캐릭터 스토리 컷신, 건너뛸 수 없는 엔딩, 끝없이 강해지는 무한 모드, 으스스한 외전 3편(조교수 생존기·대학원 괴담·연구자의 고충), 순위표.
+      - 커피머신 업그레이드, 양측 자동 포탑(프린터), 멘탈 스킬 4종, 별 3개 평가, 연구비로 유닛 레벨업·진화와 시설 강화.
+      - 배경음악·효과음 모두 직접 합성. 계정 로그인하면 어느 기기에서든 이어서 플레이, 게스트는 기기 내 저장.
+    # 녹화에 쓸 스테이지(돌아가며 사용). 최종 스테이지(7-10)는 엔딩을 건너뛸 수 없어 제외.
+    showcase_stages: ["1-5", "1-10", "2-6", "2-10", "3-4", "3-10", "4-7", "4-10", "5-5", "5-10", "6-6", "6-10", "7-4"]
+    reel_seconds: 28
+
+  agent-office:
+    mode: repo                 # 레포 소개: 레포 링크를 넣는다 (게임과 반대)
+    title: Agent Office
+    hashtag: AgentOffice
+    repo_url: https://github.com/apg0001/Agent-Office
+    demo_url: http://127.0.0.1:8080/demo      # 로그인 없이 보이는 합성 데이터 데모 화면
+    tagline: 내 AI 코딩 에이전트들이 출근하는 픽셀 사무실
+    facts:
+      - 여러 PC에서 돌아가는 AI 코딩 에이전트(Claude Code, Codex)의 활동 상태를 아이소메트릭 픽셀 사무실로 보여 주는 셀프 호스팅 서비스.
+      - 에이전트가 파일을 읽으면 도서관, 웹 검색하면 인터넷 구역, 계획 세우면 회의실, 테스트 돌리면 테스트 구역, 턴이 끝나면 휴게실로 걸어간다. 세션이 시작되면 출입구로 들어오고 끝나면 퇴근.
+      - 캐릭터 머리 위에 읽는 중·코딩 중·테스트 중·승인 대기 같은 상태 말풍선. 프롬프트·코드 내용은 보이지 않는다.
+      - 각 PC의 Collector가 Hook으로 상태(enum)와 세션·장치 ID 같은 메타데이터만 서버로 보낸다. 프롬프트, 소스 코드, 파일 본문, 명령, 로컬 경로는 보내지 않는다.
+      - 혼자 쓰는 개인 사무실, 팀원끼리 보는 팀·통합 사무실. 공유 범위(모두 / 선택한 프로젝트만 / 공유 안 함)를 팀원이 직접 고른다.
+      - 서버는 Docker Compose로 셀프 호스팅(설치 마법사, 백업·복원, 승인형 업그레이드·롤백). Collector는 Windows·macOS·Linux 설치 파일과 트레이 앱.
+      - 폰·데스크톱에 앱(PWA)으로 설치해 모니터에 사무실을 띄워 둘 수 있다.
+      - 현재 0.1.0 베타. 검증한 조합만 지원한다고 적는다.
+      - MIT 라이선스로 공개. 누구나 자유롭게 쓰고, 고치고, 다시 배포할 수 있다.
+    reel_seconds: 22

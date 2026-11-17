@@ -1,0 +1,35 @@
+{% extends "base.html.j2" %}
+{# 업종 등락: 가운데 0축에서 좌(하락)·우(상승)로 뻗는 막대. 근거가 있으면 아래에 한 줄. #}
+{% block style %}
+  .rows { margin-top: 36px; display: flex; flex-direction: column; }
+  .row { display: grid; grid-template-columns: 300px 1fr 150px; align-items: center; column-gap: 20px; padding: 10px 0; border-bottom: 1px solid var(--rule); }
+  .row .name { font-size: 29px; font-weight: 700; word-break: keep-all; line-height: 1.2; }
+  .row .name small { display: block; font-size: 21px; font-weight: 500; color: var(--muted); margin-top: 3px; }
+  .track { position: relative; height: 30px; }
+  .axis { position: absolute; left: 50%; top: -12px; bottom: -12px; width: 2px; background: var(--ink); opacity: .35; }
+  .bar { position: absolute; top: 3px; height: 24px; }
+  .bar.up { left: 50%; background: var(--up); }
+  .bar.down { right: 50%; background: var(--down); }
+  .bar.flat { left: 50%; width: 3px; background: var(--muted); }
+  .val { white-space: nowrap; font-size: 31px; font-weight: 800; text-align: right; }
+  .why { grid-column: 1 / -1; font-size: 22px; line-height: 1.45; color: var(--ink); opacity: .8; margin-top: 8px; word-break: keep-all; }
+  .why em { font-style: normal; color: var(--muted); }
+  .gap { height: 18px; }
+{% endblock %}
+{% block content %}
+  <h1>{{ title }}</h1>
+  {% if subtitle %}<h2>{{ subtitle }}</h2>{% endif %}
+  {% set maxv = (items|map(attribute='pct')|map('abs')|max) or 1 %}
+  <div class="rows">
+    {% for it in items %}
+    {% if gap_after is defined and loop.index0 == gap_after %}<div class="gap"></div>{% endif %}
+    <div class="row">
+      <div class="name">{{ it.name }}{% if it.note %}<small>{{ it.note }}</small>{% endif %}</div>
+      <div class="track"><div class="axis"></div>
+        <div class="bar {{ it.pct|tone }}" style="width: {{ (it.pct|abs) / maxv * 50 }}%"></div></div>
+      <div class="val {{ it.pct|tone }}">{{ it.pct|pct }}</div>
+      {% if it.reason %}<div class="why">{{ it.reason }}{% if it.source %} <em>{{ it.source }}</em>{% endif %}</div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+{% endblock %}

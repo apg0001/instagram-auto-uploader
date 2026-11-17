@@ -1,0 +1,17 @@
+[project]
+name = "instagram-auto-uploader"
+version = "0.1.0"
+description = "라즈베리파이에서 도는 개인용 인스타그램 자동 업로더 (노션 승인)"
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 140
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501"]  # 한국어 프롬프트·문구는 줄을 억지로 자르지 않는다
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

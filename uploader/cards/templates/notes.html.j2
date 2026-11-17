@@ -1,0 +1,28 @@
+{% extends "base.html.j2" %}
+{# 글 목록: 요주의 종목, 체크포인트, 주간 이슈, 카드뉴스 본문 등. 항목은 굵은 머리말 + 설명. #}
+{% block style %}
+  .list { margin-top: 44px; display: flex; flex-direction: column; gap: 30px; }
+  .item { display: grid; grid-template-columns: 14px 1fr; column-gap: 26px; }
+  .tick { width: 14px; height: 14px; margin-top: 16px; background: var(--{{ accent|default('ink') }}); }
+  .head { font-size: 36px; font-weight: 800; line-height: 1.3; word-break: keep-all; }
+  .body { font-size: 29px; font-weight: 500; line-height: 1.5; color: var(--ink); opacity: .82; margin-top: 6px; word-break: keep-all; }
+  .lead { margin-top: 30px; font-size: 32px; line-height: 1.55; font-weight: 500; word-break: keep-all; }
+  pre { margin-top: 10px; font-family: "Pretendard", monospace; font-size: 24px; background: var(--surface); padding: 18px 22px; border-left: 4px solid var(--ink); white-space: pre-wrap; word-break: break-all; }
+  .cta { position: absolute; left: 80px; right: 80px; bottom: 140px; font-size: 34px; font-weight: 800; padding: 26px 30px; background: var(--ink); color: var(--paper); word-break: break-all; }
+  .cta small { display: block; font-size: 24px; font-weight: 500; opacity: .75; margin-bottom: 6px; }
+{% endblock %}
+{% block content %}
+  <h1>{{ title }}</h1>
+  {% if subtitle %}<h2>{{ subtitle }}</h2>{% endif %}
+  {% if lead %}<div class="lead">{{ lead }}</div>{% endif %}
+  <div class="list">
+    {% for it in items %}
+    <div class="item"><div class="tick"></div><div>
+      {% if it.head %}<div class="head">{{ it.head }}</div>{% endif %}
+      {% if it.body %}<div class="body">{{ it.body }}</div>{% endif %}
+      {% if it.code %}<pre>{{ it.code }}</pre>{% endif %}
+    </div></div>
+    {% endfor %}
+  </div>
+  {% if cta %}<div class="cta">{% if cta_label %}<small>{{ cta_label }}</small>{% endif %}{{ cta }}</div>{% endif %}
+{% endblock %}

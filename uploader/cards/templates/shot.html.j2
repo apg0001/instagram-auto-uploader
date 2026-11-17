@@ -1,0 +1,17 @@
+{% extends "base.html.j2" %}
+{# 스크린샷 한 장 + 제목·설명. 카드뉴스용. #}
+{% block style %}
+  .shot { margin-top: 40px; border: 4px solid var(--ink); background: var(--surface); }
+  .shot img { display: block; width: 100%; image-rendering: pixelated; }
+  .cap { margin-top: 30px; font-size: 31px; line-height: 1.55; font-weight: 500; word-break: keep-all; }
+  .big { font-size: 92px; font-weight: 900; line-height: 1.05; letter-spacing: -0.04em; margin-top: 40px; word-break: keep-all; }
+  .note { margin-top: 18px; font-size: 22px; color: var(--muted); }
+{% endblock %}
+{% block content %}
+  {% if big %}<div class="big">{{ big }}</div>{% endif %}
+  {% if title %}<h1>{{ title }}</h1>{% endif %}
+  {% if subtitle %}<h2>{{ subtitle }}</h2>{% endif %}
+  <div class="shot"><img src="{{ image }}"></div>
+  {% if note %}<div class="note">{{ note }}</div>{% endif %}
+  {% if caption %}<div class="cap">{{ caption }}</div>{% endif %}
+{% endblock %}
