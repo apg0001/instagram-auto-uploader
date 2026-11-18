@@ -31,6 +31,11 @@ notion:
 github_trending:
   voice: ko-KR-SunHiNeural      # edge-tts 한국어 음성 (InJoonNeural 남성, HyunsuMultilingualNeural 남성·영어 이름 발음 좋음)
   rate: "+15%"
+  reel_offset_hours: 8          # 예약이 있으면 캐러셀은 그 시각, 릴스는 이만큼 뒤 (일 12:00 → 20:00)
+
+# 노션 콘텐츠 기획: '게시 시각'보다 이만큼 먼저 초안을 만들어 예약해 둔다 (그 사이에 승인)
+plan:
+  lead_hours: 5
 
 caption:
   command: [claude, -p, --no-session-persistence, --output-format, text]

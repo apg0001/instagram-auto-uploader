@@ -29,7 +29,9 @@ nice -n 19 .venv/bin/python -m uploader generate --source <소스> [--at 2026-11
 
 ## 3. 노션
 - 처음 한 번: `notion-setup <페이지>` → `notion-dashboard` (여러 번 실행해도 안전, 새 속성만 추가).
-- 콘텐츠 기획 표: 새 요청 → (`plan`이 Claude로 다듬음) 검토 대기 → 사람이 '사용' → 주기마다 초안.
+- 콘텐츠 기획 표: 새 요청 → (`plan`이 Claude로 다듬음) 검토 대기 → 사람이 '사용' → '다음 게시' 5시간 전에 초안 + 예약.
+  게시 칸은 평일 12:00·20:00, 주말 09·12·16·20시 (하루 4개, 증시 07:30·16:00 포함). 새 시리즈는 빈 칸에 넣는다.
+  '횟수'+'이어서'로 유한 시리즈를 다음 시리즈로 넘긴다. 속성 이름이 바뀌면 `planner.RENAMED`에 추가하고 `notion-dashboard`.
   '생성기'가 정해진 행은 전용 생성기를, 아니면 웹 조사 카드뉴스(`generate_topic`)를 쓴다.
 - 보기 API는 `Notion-Version: 2026-03-11` (`notion.VIEWS_VERSION`), 나머지는 2022-06-28.
 
