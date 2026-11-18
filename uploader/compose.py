@@ -160,6 +160,26 @@ def make_reel(raw_video: Path, start: float, seconds: float, overlay: Path, out:
     return out
 
 
+def prepend_cover(reel: Path, cover: Path, out: Path, hold: float = 0.5, skip: float = 0.4) -> Path:
+    """커버 이미지를 릴스 맨 앞 정지 화면으로 붙인다 (첫 프레임 = 인스타 기본 커버).
+
+    원본 릴스의 페이드인(skip초)은 잘라내 커버 → 본편이 검은 화면 없이 이어지게 한다.
+    """
+    run_ffmpeg([
+        "-loop", "1", "-t", f"{hold:.2f}", "-i", str(cover),
+        "-ss", f"{skip:.2f}", "-i", str(reel),
+        "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+        "-filter_complex",
+        "[0:v]fps=30,scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,"
+        "setsar=1,format=yuv420p[c];[1:v]fps=30,setsar=1,format=yuv420p[r];[c][r]concat=n=2:v=1:a=0[v]",
+        "-map", "[v]", "-map", "2:a", "-shortest",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-profile:v", "high",
+        "-r", "30", "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-movflags", "+faststart",
+        str(out),
+    ])
+    return out
+
+
 def video_cover(video: Path, at: float, out: Path) -> Path:
     run_ffmpeg(["-ss", f"{at:.2f}", "-i", str(video), "-frames:v", "1", "-q:v", "3", str(out)])
     return out

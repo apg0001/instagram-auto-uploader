@@ -18,7 +18,7 @@ from .instagram import Instagram
 from .make_webhook import MakeWebhook
 from .media_host import MediaHost
 from .notion import Notion
-from .sources import lab_wars
+from .sources import lab_wars, lab_wars_tour
 
 log = logging.getLogger("uploader")
 
@@ -46,7 +46,7 @@ class Pipeline:
         return pid, work
 
     def _finalize(self, pid: str, source: str, kind: str, title: str, text: str, media: list[Path], types: list[str],
-                  cover: Path | None = None, meta: dict | None = None) -> Post:
+                  cover: Path | None = None, meta: dict | None = None, scheduled_at: float | None = None) -> Post:
         """미디어 업로드 → 초안 저장 → 노션 등록."""
         uploads = media + ([cover] if cover else [])
         urls = self.host.upload(pid, uploads)
@@ -55,6 +55,7 @@ class Pipeline:
             media=[{"file": str(f), "url": u, "type": t} for f, u, t in zip(media, urls, types, strict=False)],
             meta={**(meta or {}), "cover_url": urls[-1] if cover else None},
         )
+        post.scheduled_at = scheduled_at
         if self.auto_approved(source):
             post.status = APPROVED  # 노션에는 '승인'으로 올라가고 다음 sync에서 게시 (노션에서 반려로 바꾸면 취소)
         self.db.save(post)  # 노션이 실패해도 초안은 남긴다 (sync가 다시 올림)
@@ -66,12 +67,15 @@ class Pipeline:
         """config auto_approve 의 접두어로 시작하는 소스는 사람 승인 없이 게시한다."""
         return any(source == a or source.startswith((a + ":", a + "-")) for a in self.cfg.raw.get("auto_approve") or [])
 
-    def generate(self, source: str = "lab-wars", kind: str | None = None, stage: str | None = None) -> Post | None:
+    def generate(self, source: str = "lab-wars", kind: str | None = None, stage: str | None = None,
+                 at: str | None = None) -> Post | None:
         if source.startswith("market"):
             report = source.split(":", 1)[1] if ":" in source else "close"
             return self.generate_market(report)
         if source == "agent-office":
             return self.generate_repo(source, kind)
+        if source.startswith("lab-wars:"):
+            return self.generate_tour(source.split(":", 1)[1], parse_when(at, self.tz))
         if source == "lab-wars":
             return self.generate_game(source, kind, stage)
         raise ValueError(f"모르는 소스: {source} (lab-wars | agent-office | market:premarket|close|weekly|monthly)")
@@ -100,8 +104,9 @@ class Pipeline:
             ov = compose.reel_overlay(compose.ReelText(
                 label="모바일 웹게임", title="랩워즈", subtitle=src["tagline"], scene=scene,
                 cta="설치 없이 브라우저에서 바로 · 프로필 링크"), out / "overlay.png")
-            reel = compose.make_reel(cap.video, cap.battle_start + 0.5, seconds, ov, out / "reel.mp4")
-            cover = compose.video_cover(reel, min(seconds / 2, 12), out / "cover.jpg")
+            body = compose.make_reel(cap.video, cap.battle_start + 0.5, seconds, ov, out / "body.mp4")
+            cover = compose.video_cover(body, min(seconds / 2, 12), out / "cover.jpg")
+            reel = compose.prepend_cover(body, cover, out / "reel.mp4")
             media, types = [reel], ["video"]
             slides_desc = [f"{scene} 전투 플레이 영상 {int(seconds)}초"]
         elif kind == "CAROUSEL":
@@ -136,6 +141,44 @@ class Pipeline:
         shutil.rmtree(work / "capture" / "raw", ignore_errors=True)  # 원본 녹화는 크니 지운다
         return post
 
+    def generate_tour(self, feature: str, scheduled_at: float | None = None) -> Post:
+        """랩워즈 기능 소개 시리즈 (overview 등). scheduled_at 이 있으면 그 시각 이후에 게시."""
+        src = self.cfg.source("lab-wars")
+        if feature != "overview":
+            raise ValueError(f"모르는 랩워즈 소개: {feature} (overview)")
+        pid, work = self._new_id("lab-wars", "carousel")
+        out = work / "out"
+        log.info("생성 시작 %s (소개: %s)", pid, feature)
+        s = lab_wars_tour.run_overview(src["play_url"], work / "capture")
+        plan = [
+            ("title", src["tagline"], "대학원생 라인 디펜스, 랩워즈. 설치 없이 브라우저에서 바로"),
+            ("battle2", "카페인 모아 동료 출동", "학부생부터 박사까지, 진화하는 연구실 동료 12종"),
+            ("story", "스테이지마다 스토리 컷신", "학부생에서 포닥까지 7챕터 70스테이지"),
+            ("gacha", "장비 지원 뽑기", "입자 가속기 · 양자컴퓨터 · 토카막… ICT 장비 28종"),
+            ("side", "외전 7편", "엔딩 뒤 이야기. 정전 · 마감 24시 · AI 복제, 편마다 특수 규칙"),
+            ("major", "전공 모드", "41과목 이수체계도. 자료구조는 스택, 신호와시스템은 샘플링이 전투 규칙"),
+            ("endless", "무한 모드 · 순위표", "끝없이 강해지는 적과 버그 군단"),
+            ("wardrobe", "꾸미기 옷장", "논문 투고 심사 결과로 모자 · 옷 색 · 칭호"),
+        ]
+        media: list[Path] = []
+        slides_desc: list[str] = []
+        for key, head, body in plan:
+            if key not in s:
+                continue
+            media.append(compose.slide(s[key], head, body, out / f"{len(media) + 1}.jpg", FOOTER))
+            slides_desc.append(f"{head} — {body}")
+        media.append(compose.cta_slide("지금 바로 플레이", ["폰 가로 · 세로 모두 지원", "설치 없이 브라우저에서"],
+                                       src["play_url"].removeprefix("https://").rstrip("/"),
+                                       out / f"{len(media) + 1}.jpg"))
+        slides_desc.append("마지막: 플레이 링크 안내")
+        scene = "랩워즈 전체 소개 (업데이트 총정리: 장비 뽑기 · 외전 7편 · 전공 모드 · 무한 모드 · 꾸미기)"
+        text = captions.generate(src, self.cfg.caption, "CAROUSEL", scene, slides_desc,
+                                 self.db.recent_captions("lab-wars"))
+        post = self._finalize(pid, "lab-wars", "CAROUSEL", "[소개] 랩워즈 전체 소개", text, media,
+                              ["image"] * len(media), None, {"tour": feature, "check": "link"},
+                              scheduled_at=scheduled_at)
+        return post
+
     def generate_repo(self, source: str, kind: str | None) -> Post:
         """레포 소개: 데모 영상 릴스 또는 카드뉴스 캐러셀."""
         from .cards.render import render
@@ -159,8 +202,9 @@ class Pipeline:
                 scene="파일을 읽으면 도서관으로, 테스트를 돌리면 테스트 구역으로",
                 cta=f"{repo_short}  ·  프로필 링크"), out / "overlay.png",
                 video_h=compose.video_height(cap.crop), colors=colors)
-            reel = compose.make_reel(cap.video, cap.start + 0.3, seconds, ov, out / "reel.mp4", crop=cap.crop)
-            cover = compose.video_cover(reel, min(seconds / 2, 10), out / "cover.jpg")
+            body = compose.make_reel(cap.video, cap.start + 0.3, seconds, ov, out / "body.mp4", crop=cap.crop)
+            cover = compose.video_cover(body, min(seconds / 2, 10), out / "cover.jpg")
+            reel = compose.prepend_cover(body, cover, out / "reel.mp4")
             media, types = [reel], ["video"]
             slides_desc = [f"합성 데모 데이터로 돌아가는 사무실 화면 {int(seconds)}초 (캐릭터가 상태에 따라 구역을 이동)"]
         else:

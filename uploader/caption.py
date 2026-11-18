@@ -44,7 +44,7 @@ def build_prompt(src: dict[str, Any], kind: str, scene: str, slides: list[str], 
         subject = "게임"
         rules = f"""- 첫 줄은 스크롤을 멈추게 하는 짧은 훅. 대학원생·연구실 공감 유머 톤, 과장 광고 말투는 피한다.
 - 본문 3~6줄. 이번 장면과 게임 특징 1~2개만 골라 구체적으로. 위 사실에 없는 기능을 지어내지 않는다.
-- 플레이 링크 줄을 꼭 넣는다: "▶ 플레이: {src['play_url']}" (모바일 가로 화면 추천, 설치 없이 브라우저에서).
+- 플레이 링크 줄을 꼭 넣는다: "▶ 플레이: {src['play_url']}" (폰 가로·세로 모두, 설치 없이 브라우저에서).
 - GitHub 저장소, 레포, 소스코드, 오픈소스, 개발 과정 이야기는 절대 쓰지 않는다. 게임만 소개한다.
 - 마지막 줄에 해시태그 8~15개 (한국어 위주, #{src.get('hashtag', '랩워즈')} 포함)."""
     return f"""너는 {who}의 인스타그램 계정 캡션을 쓰는 사람이다. 아래 {subject}를 소개하는 {kind_ko} 게시물 캡션을 한국어로 써라.
@@ -118,7 +118,7 @@ def call_claude(prompt: str, cfg: dict[str, Any]) -> str:
         proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True, cwd=cwd,
                               timeout=cfg.get("timeout_seconds", 300))
     if proc.returncode != 0:
-        raise CaptionError(f"claude 실행 실패({proc.returncode}): {proc.stderr[-1000:]}")
+        raise CaptionError(f"claude 실행 실패({proc.returncode}): {(proc.stderr or proc.stdout)[-1000:]}")
     return proc.stdout
 
 
