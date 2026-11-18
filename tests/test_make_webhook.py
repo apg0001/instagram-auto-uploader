@@ -23,7 +23,9 @@ def test_payload_shapes_media():
     p = payload("CAROUSEL", MEDIA, "캡션", None, "abc")
     assert p["kind"] == "CAROUSEL" and p["post_id"] == "abc" and p["count"] == 2
     assert p["image_url"] == "https://x/1.jpg" and p["video_url"] == "https://x/2.mp4"
-    assert p["media"] == [{"type": "IMAGE", "url": "https://x/1.jpg"}, {"type": "VIDEO", "url": "https://x/2.mp4"}]
+    assert [(i["type"], i["url"]) for i in p["media"]] == [("IMAGE", "https://x/1.jpg"), ("VIDEO", "https://x/2.mp4")]
+    assert p["media"][0]["image_url"] == "https://x/1.jpg" and p["media"][1]["video_url"] == "https://x/2.mp4"
+    assert p["media"][1]["media_type"] == "VIDEO"
 
 
 def test_publish_returns_id_and_permalink(monkeypatch):
