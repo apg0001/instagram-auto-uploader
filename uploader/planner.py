@@ -27,6 +27,7 @@ log = logging.getLogger("uploader")
 
 NEW, REVIEW, ACTIVE, PAUSED, DONE, ERROR = "새 요청", "검토 대기", "사용", "일시중지", "완료", "오류"
 PLAN_STATUS = {NEW: "yellow", REVIEW: "orange", ACTIVE: "green", PAUSED: "gray", DONE: "blue", ERROR: "red"}
+GENERATORS = {"웹 조사 카드뉴스": "default", "깃허브 트렌딩 릴스": "blue"}  # 생성기 → 만드는 방법
 CADENCES = ["한 번", "매일", "매주", "격주", "매월"]
 DAYS = ["월", "화", "수", "목", "금", "토", "일"]
 DEFAULT_TIME = "10:00"
@@ -111,6 +112,7 @@ PLAN_PROPS = {
     "이름": {"title": {}},
     "상태": _select(PLAN_STATUS),
     "메모": {"rich_text": {}},
+    "생성기": _select(GENERATORS),
     "주제": _select(TOPIC_OPTIONS),
     "주기": _select(CADENCES),
     "요일": {"multi_select": {"options": [{"name": d} for d in DAYS]}},
@@ -208,8 +210,15 @@ def setup_dashboard(pl: Pipeline) -> list[str]:
             log.warning("보기 %s 실패: %s", spec["name"], e)
             done.append(f"보기 {spec['name']} 실패 (로그 확인)")
 
-    # 3) 기획 DB + 사용법 (페이지 맨 아래)
-    if not pl.db.kv_get("notion_plan_db_id"):
+    # 3) 기획 DB + 사용법 (페이지 맨 아래). 이미 있으면 새로 생긴 속성만 추가
+    plan_id = pl.db.kv_get("notion_plan_db_id")
+    if plan_id:
+        plan_ds = n.database(plan_id)["data_sources"][0]["id"]
+        missing = {k: v for k, v in PLAN_PROPS.items() if k not in n.data_source(plan_ds)["properties"]}
+        if missing:
+            n.add_properties(plan_id, missing)
+            done.append("기획 DB 속성 추가: " + ", ".join(missing))
+    else:
         n.append(parent, [_block(k, t) for k, t in GUIDE])
         plan_id = n.create_db(parent, "콘텐츠 기획", PLAN_PROPS, icon="🗓")
         pl.db.kv_set("notion_plan_db_id", plan_id)
@@ -299,7 +308,10 @@ def run_due(pl: Pipeline, page: dict, now: datetime) -> bool:
     brief = f"{name}\n\n{prop_text(pr, '다듬은 규칙') or prop_text(pr, '메모')}"
     topic = themes.from_ko(prop_text(pr, "주제")) or "tech"
     try:
-        pl.generate_topic(brief, source=f"plan-{topic}", topic_theme=topic, title=name)
+        if prop_text(pr, "생성기") == "깃허브 트렌딩 릴스":
+            pl.generate("github-trending")
+        else:
+            pl.generate_topic(brief, source=f"plan-{topic}", topic_theme=topic, title=name)
     except Exception as e:  # noqa: BLE001 — 실패해도 다음 주기는 계속
         log.exception("기획 생성 실패 %s", name)
         pl.notion.set_props(page["id"], {"오류": {"rich_text": rich(f"{now:%m/%d %H:%M} 생성 실패: {e}"[:1900])}})
