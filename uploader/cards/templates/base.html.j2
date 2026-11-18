@@ -20,6 +20,7 @@
     --down: #1C56D1;       /* 하락 파랑 */
     --up-wash: #FBE3E1;
     --down-wash: #E1E9FB;
+    --accent: #20242B;     /* 주제 색 (uploader/themes.py) — 상단 띠 */
   }
   {% if theme %}:root { {% for k, v in theme.items() %}--{{ k }}: {{ v }}; {% endfor %}}{% endif %}
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -29,6 +30,7 @@
     font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; letter-spacing: -0.01em;
   }
   .page { position: relative; width: 1080px; height: 1350px; padding: 84px 80px 0; display: flex; flex-direction: column; }
+  .band { position: absolute; left: 0; top: 0; width: 1080px; height: 14px; background: var(--accent); }
   .meta { display: flex; justify-content: space-between; align-items: baseline; font-size: 26px; color: var(--muted); font-weight: 500; }
   .meta b { color: var(--ink); font-weight: 700; }
   h1 { font-size: 64px; font-weight: 800; line-height: 1.18; letter-spacing: -0.03em; margin-top: 36px; }
@@ -44,6 +46,7 @@
 </head>
 <body class="{% block bodyclass %}{% endblock %}">
 <div class="page">
+  <div class="band"></div>
   <div class="meta"><span><b>{{ brand }}</b>  {{ report_name }}</span><span>{{ date_label }}</span></div>
   <main class="fit">{% block content %}{% endblock %}</main>
   <div class="foot">
