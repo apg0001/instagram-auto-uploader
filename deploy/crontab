@@ -22,6 +22,8 @@ APP=/home/gichan/instagram-auto-uploader
 # ── 운영 ─────────────────────────────────────────────────────────────
 # 1분마다 노션 승인 결과 반영 + 승인 건 게시 (장 시작 전 브리핑이 늦지 않게)
 * * * * *      cd $APP && .venv/bin/python -m uploader sync >> data/cron.log 2>&1
+# 노션 콘텐츠 기획: 새 요청 다듬기 + 때가 된 정기 초안 생성 (한 번에 1개)
+*/5 * * * *    cd $APP && nice -n 19 .venv/bin/python -m uploader plan >> data/cron.log 2>&1
 # 매일 새벽 보존 기한(7일) 지난 미디어 삭제
 30 4 * * *     cd $APP && .venv/bin/python -m uploader cleanup >> data/cron.log 2>&1
 # 매주 월요일 인스타 장기 토큰 갱신 (연동 전에는 아무것도 안 함)

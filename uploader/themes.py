@@ -15,19 +15,19 @@ def _hex(rgb: tuple[int, int, int]) -> str:
 
 THEMES: dict[str, dict[str, Any]] = {
     # 게임(랩워즈): 따뜻한 크림 + 주황
-    "game": {"label": "GAME", "bg": (243, 235, 221), "ink": (40, 33, 45), "sub": (110, 98, 112),
+    "game": {"ko": "게임", "notion": "orange", "label": "GAME", "bg": (243, 235, 221), "ink": (40, 33, 45), "sub": (110, 98, 112),
              "card": (255, 251, 244), "accent": (255, 112, 67)},
     # 내가 만든 프로젝트·오픈소스(Agent Office 등): 남색 + 노랑 (제품 화면 색)
-    "project": {"label": "PROJECT", "bg": (28, 31, 51), "ink": (242, 240, 230), "sub": (154, 160, 191),
+    "project": {"ko": "프로젝트", "notion": "blue", "label": "PROJECT", "bg": (28, 31, 51), "ink": (242, 240, 230), "sub": (154, 160, 191),
                 "card": (38, 42, 68), "accent": (245, 197, 66)},
     # 증시: 차가운 회색 종이 + 먹색 (상승 빨강·하락 파랑과 겹치지 않게 무채색)
-    "market": {"label": "MARKET", "bg": (238, 240, 243), "ink": (32, 36, 43), "sub": (110, 119, 135),
+    "market": {"ko": "증시", "notion": "gray", "label": "MARKET", "bg": (238, 240, 243), "ink": (32, 36, 43), "sub": (110, 119, 135),
                "card": (255, 255, 255), "accent": (32, 36, 43)},
     # 테크·AI 소식: 연보라 + 보라
-    "tech": {"label": "TECH · AI", "bg": (240, 237, 252), "ink": (30, 26, 51), "sub": (104, 98, 133),
+    "tech": {"ko": "테크·AI", "notion": "purple", "label": "TECH · AI", "bg": (240, 237, 252), "ink": (30, 26, 51), "sub": (104, 98, 133),
              "card": (255, 255, 255), "accent": (109, 74, 255)},
     # 개발자 커리어(취업·연봉·채용): 민트 + 초록
-    "career": {"label": "CAREER", "bg": (232, 245, 239), "ink": (22, 42, 35), "sub": (92, 117, 107),
+    "career": {"ko": "커리어", "notion": "green", "label": "CAREER", "bg": (232, 245, 239), "ink": (22, 42, 35), "sub": (92, 117, 107),
                "card": (255, 255, 255), "accent": (16, 163, 127)},
 }
 
@@ -36,9 +36,19 @@ SOURCE_TOPIC = {"lab-wars": "game", "agent-office": "project", "market": "market
                 "tech": "tech", "career": "career"}
 
 
+def ko(topic: str) -> str:
+    return get(topic)["ko"]
+
+
+def from_ko(name: str | None) -> str | None:
+    return next((k for k, t in THEMES.items() if t["ko"] == name), None)
+
+
 def topic_of(source: str, src_cfg: dict[str, Any] | None = None) -> str:
     if src_cfg and src_cfg.get("topic") in THEMES:
         return src_cfg["topic"]
+    if source.startswith("plan-") and source[5:] in THEMES:  # 노션 기획 DB에서 만든 게시물
+        return source[5:]
     for prefix, topic in SOURCE_TOPIC.items():
         if source == prefix or source.startswith((prefix + ":", prefix + "-")):
             return topic

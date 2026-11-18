@@ -272,16 +272,19 @@ class Pipeline:
         return self._finalize(pid, source, "CAROUSEL", title, ana["caption"], media, ["image"] * len(media),
                               meta={"check": "market", "report": report, "expires_at": expires})
 
-    def generate_topic(self, topic: str, design: str = "template") -> Post:
-        """요청형: 주제를 조사해 카드뉴스 초안을 만든다."""
+    def generate_topic(self, topic: str, design: str = "template", source: str = "topic",
+                       topic_theme: str | None = None, title: str | None = None) -> Post:
+        """요청형: 주제를 조사해 카드뉴스 초안을 만든다. 노션 기획 DB에서는 source=plan-<주제>."""
         from . import custom
 
-        pid, work = self._new_id("topic", "carousel")
-        content, media = custom.make_topic(topic, self.cfg.caption, work / "out", design,
-                                           theme=themes.css(themes.topic_of("topic")))
+        theme = topic_theme or themes.topic_of(source)
+        pid, work = self._new_id(source, "carousel")
+        content, media = custom.make_topic(topic, self.cfg.caption, work / "out", design, theme=themes.css(theme))
         kind = "CAROUSEL" if len(media) > 1 else "IMAGE"
-        return self._finalize(pid, "topic", kind, f"[주제] {content.get('title', topic)}", content["caption"], media,
-                              ["image"] * len(media), meta={"check": "none", "topic": topic, "design": design})
+        head = f"[{title}]" if title else "[주제]"
+        return self._finalize(pid, source, kind, f"{head} {content.get('title', topic[:40])}", content["caption"], media,
+                              ["image"] * len(media),
+                              meta={"check": "none", "topic": topic, "design": design, "topic_theme": theme})
 
     def post_manual(self, title: str, text: str, files: list[Path]) -> Post:
         """요청형: 준비된 이미지·영상과 캡션으로 바로 초안을 만든다."""

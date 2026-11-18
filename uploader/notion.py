@@ -10,11 +10,14 @@ from typing import Any
 
 import requests
 
+from . import themes
 from .db import APPROVED, DRAFT, FAILED, PUBLISHED, REJECTED, Post
 
 API = "https://api.notion.com/v1"
 STATUS_COLORS = {DRAFT: "yellow", APPROVED: "blue", PUBLISHED: "green", REJECTED: "gray", FAILED: "red"}
 KIND_COLORS = {"REELS": "purple", "CAROUSEL": "orange", "IMAGE": "brown", "STORIES": "pink"}
+VIEWS_VERSION = "2026-03-11"  # 보기(view) API는 이 버전부터
+TOPIC_OPTIONS = {t["ko"]: t["notion"] for t in themes.THEMES.values()}
 CHUNK = 2000  # rich_text 한 덩어리 최대 길이
 
 
@@ -45,8 +48,9 @@ class Notion:
         self.s.headers.update({"Authorization": f"Bearer {token}", "Notion-Version": version,
                                "Content-Type": "application/json"})
 
-    def _req(self, method: str, path: str, **kw) -> dict:
-        r = self.s.request(method, f"{API}{path}", timeout=30, **kw)
+    def _req(self, method: str, path: str, version: str | None = None, **kw) -> dict:
+        headers = {"Notion-Version": version} if version else None
+        r = self.s.request(method, f"{API}{path}", timeout=30, headers=headers, **kw)
         if r.status_code >= 400:
             raise RuntimeError(f"Notion {method} {path} → {r.status_code}: {r.text[:500]}")
         return r.json()
@@ -65,6 +69,7 @@ class Notion:
                 "상태": select(STATUS_COLORS),
                 "형식": select(KIND_COLORS),
                 "소스": {"select": {}},
+                "주제": select(TOPIC_OPTIONS),
                 "캡션": {"rich_text": {}},
                 "미디어": {"files": {}},
                 "예약": {"date": {}},
@@ -96,6 +101,7 @@ class Notion:
                 "상태": {"select": {"name": p.status}},
                 "형식": {"select": {"name": p.kind}},
                 "소스": {"select": {"name": p.source}},
+                "주제": {"select": {"name": themes.ko(p.meta.get("topic_theme") or themes.topic_of(p.source))}},
                 "캡션": {"rich_text": rich(p.caption)},
                 "미디어": {"files": files},
                 "ID": {"rich_text": rich(p.id)},
@@ -126,3 +132,65 @@ class Notion:
         if error is not None:
             props["오류"] = {"rich_text": rich(error[:1900])}
         self._req("PATCH", f"/pages/{page_id}", json={"properties": props})
+
+    # --- 범용 (대시보드·기획 DB) ---
+    def query(self, db_id: str, flt: dict | None = None) -> list[dict]:
+        out, cursor = [], None
+        while True:
+            body: dict[str, Any] = {"page_size": 100, **({"filter": flt} if flt else {})}
+            if cursor:
+                body["start_cursor"] = cursor
+            r = self._req("POST", f"/databases/{db_id}/query", json=body)
+            out += r["results"]
+            if not r.get("has_more"):
+                return out
+            cursor = r["next_cursor"]
+
+    def set_props(self, page_id: str, props: dict[str, Any]) -> None:
+        self._req("PATCH", f"/pages/{page_id}", json={"properties": props})
+
+    def add_properties(self, db_id: str, props: dict[str, Any]) -> None:
+        self._req("PATCH", f"/databases/{db_id}", json={"properties": props})
+
+    def create_db(self, parent_page: str, title: str, props: dict[str, Any], icon: str | None = None) -> str:
+        body = {"parent": {"type": "page_id", "page_id": parent_page}, "title": rich(title), "is_inline": True,
+                "properties": props, **({"icon": {"type": "emoji", "emoji": icon}} if icon else {})}
+        return self._req("POST", "/databases", json=body)["id"]
+
+    def database(self, db_id: str) -> dict:
+        return self._req("GET", f"/databases/{db_id}", version=VIEWS_VERSION)
+
+    def data_source(self, ds_id: str) -> dict:
+        return self._req("GET", f"/data_sources/{ds_id}", version=VIEWS_VERSION)
+
+    def views(self, db_id: str) -> list[dict]:
+        r = self._req("GET", "/views", version=VIEWS_VERSION, params={"database_id": db_id})
+        return [self._req("GET", f"/views/{v['id']}", version=VIEWS_VERSION) for v in r["results"]]
+
+    def create_view(self, body: dict) -> dict:
+        return self._req("POST", "/views", version=VIEWS_VERSION, json=body)
+
+    def update_view(self, view_id: str, body: dict) -> dict:
+        return self._req("PATCH", f"/views/{view_id}", version=VIEWS_VERSION, json=body)
+
+    def children(self, block_id: str) -> list[dict]:
+        return self._req("GET", f"/blocks/{block_id}/children", params={"page_size": 100})["results"]
+
+    def append(self, block_id: str, blocks: list[dict], after: str | None = None) -> list[dict]:
+        body: dict[str, Any] = {"children": blocks, **({"after": after} if after else {})}
+        return self._req("PATCH", f"/blocks/{block_id}/children", json=body)["results"]
+
+
+def prop_text(props: dict, name: str) -> str:
+    """페이지 속성 값을 글자로 (title·rich_text·select·multi_select·date)."""
+    v = props.get(name) or {}
+    t = v.get("type")
+    if t in ("title", "rich_text"):
+        return plain(v[t])
+    if t == "select":
+        return (v["select"] or {}).get("name") or ""
+    if t == "multi_select":
+        return ",".join(o["name"] for o in v["multi_select"])
+    if t == "date":
+        return (v["date"] or {}).get("start") or ""
+    return ""
