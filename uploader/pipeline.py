@@ -70,18 +70,20 @@ class Pipeline:
         if source.startswith("market"):
             report = source.split(":", 1)[1] if ":" in source else "close"
             return self.generate_market(report)
+        when = parse_when(at, self.tz)
         if source == "agent-office":
-            return self.generate_repo(source, kind)
+            return self.generate_repo(source, kind, when)
         if source.startswith("lab-wars:"):
-            return self.generate_tour(source.split(":", 1)[1], parse_when(at, self.tz))
+            return self.generate_tour(source.split(":", 1)[1], when)
         if source == "lab-wars":
-            return self.generate_game(source, kind, stage)
+            return self.generate_game(source, kind, stage, when)
         if source == "github-trending":
-            return self.generate_github(parse_when(at, self.tz))
+            return self.generate_github(when)
         raise ValueError(f"모르는 소스: {source} (lab-wars | agent-office | github-trending | market:premarket|close|weekly|monthly)")
 
     def generate_github(self, scheduled_at: float | None = None) -> Post:
-        """주간 깃허브 인기 레포 Top 5: 릴스(릴스 탭, TTS + 합성 BGM) + 캐러셀(피드) 두 개를 만든다. 릴스 초안을 돌려준다."""
+        """주간 깃허브 인기 레포 Top 5: 릴스(릴스 탭, TTS + 합성 BGM) + 캐러셀(피드) 두 개를 만든다. 릴스 초안을 돌려준다.
+        예약이 있으면 캐러셀은 그 시각, 릴스는 reel_offset_hours(기본 8) 뒤 — 같은 시각에 두 개가 몰리지 않게."""
         from . import github_reel
         from .sources import github_trending as gt
 
@@ -99,15 +101,17 @@ class Pipeline:
         res = github_reel.build(repos, prev, readmes, metas, day, work / "out", self.cfg.caption,
                                 voice_name=src.get("voice", "ko-KR-SunHiNeural"), rate=src.get("rate", "+15%"))
         meta = {"check": "none", "slides": res.desc, "topic_theme": "tech"}
+        reel_at = scheduled_at + float(src.get("reel_offset_hours", 8)) * 3600 if scheduled_at else None
         reel = self._finalize(pid, "tech-github", "REELS", f"[깃허브 Top 5 · 릴스] {day:%m/%d}", res.reel_caption,
-                              [res.reel], ["video"], res.cover, meta, scheduled_at)
+                              [res.reel], ["video"], res.cover, meta, reel_at)
         cid = pid.replace("-reels", "-carousel")
         (self.cfg.data_dir / "posts" / cid).mkdir(parents=True, exist_ok=True)
         self._finalize(cid, "tech-github", "CAROUSEL", f"[깃허브 Top 5 · 캐러셀] {day:%m/%d}", res.carousel_caption,
                        res.carousel, ["image"] * len(res.carousel), None, meta, scheduled_at)
         return reel
 
-    def generate_game(self, source: str, kind: str | None, stage: str | None) -> Post:
+    def generate_game(self, source: str, kind: str | None, stage: str | None,
+                      scheduled_at: float | None = None) -> Post:
         src = self.cfg.source(source)
         n = self.db.count_source(source)
         kind = kind or KIND_ROTATION[n % len(KIND_ROTATION)]
@@ -164,7 +168,7 @@ class Pipeline:
         if kind != "STORIES":  # 스토리는 캡션이 없다
             text = captions.generate(src, self.cfg.caption, kind, scene, slides_desc, self.db.recent_captions(source))
         post = self._finalize(pid, source, kind, f"[{kind}] {scene}", text, media, types, cover,
-                              {"stage": stage, "check": "link"})
+                              {"stage": stage, "check": "link"}, scheduled_at)
         shutil.rmtree(work / "capture" / "raw", ignore_errors=True)  # 원본 녹화는 크니 지운다
         return post
 
@@ -241,7 +245,7 @@ class Pipeline:
         shutil.rmtree(work / "capture" / "raw", ignore_errors=True)
         return post
 
-    def generate_repo(self, source: str, kind: str | None) -> Post:
+    def generate_repo(self, source: str, kind: str | None, scheduled_at: float | None = None) -> Post:
         """레포 소개: 데모 영상 릴스 또는 카드뉴스 캐러셀."""
         from .cards.render import render
         from .sources import agent_office
@@ -302,7 +306,8 @@ class Pipeline:
             types = ["image"] * len(media)
             slides_desc = ["표지: 사무실 화면", "구역별 의미", "머리 위 상태", "개인정보 원칙", "개인·팀 사무실", "설치 3단계", "레포 링크"]
         text = captions.generate(src, self.cfg.caption, kind, "레포 소개", slides_desc, self.db.recent_captions(source))
-        post = self._finalize(pid, source, kind, f"[{kind}] {src['title']} 소개", text, media, types, cover, {"check": "link"})
+        post = self._finalize(pid, source, kind, f"[{kind}] {src['title']} 소개", text, media, types, cover, {"check": "link"},
+                              scheduled_at)
         shutil.rmtree(work / "capture" / "raw", ignore_errors=True)
         return post
 
@@ -337,7 +342,8 @@ class Pipeline:
                               meta={"check": "market", "report": report, "expires_at": expires})
 
     def generate_topic(self, topic: str, design: str = "template", source: str = "topic",
-                       topic_theme: str | None = None, title: str | None = None) -> Post:
+                       topic_theme: str | None = None, title: str | None = None,
+                       scheduled_at: float | None = None) -> Post:
         """요청형: 주제를 조사해 카드뉴스 초안을 만든다. 노션 기획 DB에서는 source=plan-<주제>."""
         from . import custom
 
@@ -348,7 +354,8 @@ class Pipeline:
         head = f"[{title}]" if title else "[주제]"
         return self._finalize(pid, source, kind, f"{head} {content.get('title', topic[:40])}", content["caption"], media,
                               ["image"] * len(media),
-                              meta={"check": "none", "topic": topic, "design": design, "topic_theme": theme})
+                              meta={"check": "none", "topic": topic, "design": design, "topic_theme": theme},
+                              scheduled_at=scheduled_at)
 
     def post_manual(self, title: str, text: str, files: list[Path]) -> Post:
         """요청형: 준비된 이미지·영상과 캡션으로 바로 초안을 만든다."""

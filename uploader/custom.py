@@ -82,8 +82,9 @@ def research(topic: str, cfg: dict[str, Any], n_min: int = 4, n_max: int = 8) ->
 
 
 def template_slides(content: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
-    foot = "출처: " + ", ".join(content.get("sources") or []) if content.get("sources") else ""
-    c = {"brand": content.get("brand", ""), "report_name": "", "date_label": "", "footnote": foot[:70]}
+    # 출처 전체는 캡션에 있으니 하단에는 짧게 (예전엔 첫 출처가 모든 장에 잘려 찍혔다)
+    foot = "출처는 캡션에" if content.get("sources") else ""
+    c = {"brand": content.get("brand", ""), "report_name": "", "date_label": "", "footnote": foot}
     out = []
     for s in content["slides"][:10]:
         t = s.get("type")

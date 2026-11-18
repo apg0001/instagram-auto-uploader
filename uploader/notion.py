@@ -182,7 +182,7 @@ class Notion:
 
 
 def prop_text(props: dict, name: str) -> str:
-    """페이지 속성 값을 글자로 (title·rich_text·select·multi_select·date)."""
+    """페이지 속성 값을 글자로 (title·rich_text·select·multi_select·date·number)."""
     v = props.get(name) or {}
     t = v.get("type")
     if t in ("title", "rich_text"):
@@ -193,4 +193,6 @@ def prop_text(props: dict, name: str) -> str:
         return ",".join(o["name"] for o in v["multi_select"])
     if t == "date":
         return (v["date"] or {}).get("start") or ""
+    if t == "number":
+        return "" if v["number"] is None else str(v["number"])
     return ""

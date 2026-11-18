@@ -31,4 +31,4 @@ def test_template_slides_maps_types():
     assert [n for n, _ in slides] == ["notes", "notes", "notes"]
     assert slides[0][1]["lead"] == "S"
     assert slides[2][1]["items"][0]["head"] == "42% 점유율"
-    assert "연합뉴스" in slides[0][1]["footnote"]
+    assert slides[0][1]["footnote"] == "출처는 캡션에"  # 잘린 첫 출처가 모든 장에 찍히지 않게
