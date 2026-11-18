@@ -168,6 +168,22 @@ def make_reel(raw_video: Path, start: float, seconds: float, overlay: Path, out:
     return out
 
 
+def concat(parts: list[Path], out: Path) -> Path:
+    """같은 형식으로 만든 클립들을 다시 인코딩 없이 이어 붙인다."""
+    lst = out.with_suffix(".txt")
+    lst.write_text("".join(f"file '{p.resolve()}'\n" for p in parts), encoding="utf-8")
+    run_ffmpeg(["-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy", "-movflags", "+faststart", str(out)])
+    return out
+
+
+def replace_audio(video: Path, audio: Path, out: Path, volume: float = 1.0) -> Path:
+    """영상의 소리를 audio(BGM 등)로 바꾼다. 길이는 영상 기준."""
+    run_ffmpeg(["-i", str(video), "-i", str(audio), "-filter_complex", f"[1:a]volume={volume}[a]",
+                "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-ar", "44100",
+                "-shortest", "-movflags", "+faststart", str(out)])
+    return out
+
+
 def prepend_cover(reel: Path, cover: Path, out: Path, hold: float = 0.5, skip: float = 0.4) -> Path:
     """커버 이미지를 릴스 맨 앞 정지 화면으로 붙인다 (첫 프레임 = 인스타 기본 커버).
 
@@ -179,8 +195,11 @@ def prepend_cover(reel: Path, cover: Path, out: Path, hold: float = 0.5, skip: f
         "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
         "-filter_complex",
         "[0:v]fps=30,scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,"
-        "setsar=1,format=yuv420p[c];[1:v]fps=30,setsar=1,format=yuv420p[r];[c][r]concat=n=2:v=1:a=0[v]",
-        "-map", "[v]", "-map", "2:a", "-shortest",
+        "setsar=1,format=yuv420p[c];[1:v]fps=30,setsar=1,format=yuv420p[r];[c][r]concat=n=2:v=1:a=0[v];"
+        # 커버 구간은 무음, 그 뒤로 원본 소리(BGM·내레이션)를 그대로 잇는다
+        f"[2:a]atrim=0:{hold:.2f},asetpts=PTS-STARTPTS[s];[1:a]aresample=44100,aformat=channel_layouts=stereo,"
+        "asetpts=PTS-STARTPTS[ra];[s][ra]concat=n=2:v=0:a=1[a]",
+        "-map", "[v]", "-map", "[a]",
         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-profile:v", "high",
         "-r", "30", "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-movflags", "+faststart",
         str(out),

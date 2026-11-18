@@ -103,7 +103,7 @@ flowchart LR
 
 - **내레이션** — [edge-tts](https://github.com/rany2/edge-tts)(무료, API 키 없음)의 한국어 음성. 비공식 엔드포인트라 막히면 음성 없이 자막·BGM만으로 만듭니다. 음성은 `config.yaml`의 `github_trending.voice`.
 - **BGM** — [`uploader/bgm.py`](uploader/bgm.py)가 numpy로 직접 합성합니다. 날짜를 시드로 조성·템포·코드 진행·드럼 패턴·음색이 매번 바뀌고, 저작권 걱정이 없습니다. 목소리가 나올 때는 사이드체인으로 자동으로 작아집니다.
-- 랩워즈 릴스는 게임이 실시간으로 합성하는 효과음·배경음을 그대로 씁니다.
+- 랩워즈 릴스도 같은 합성 BGM을 깝니다 (헤드리스 녹화에는 게임 소리가 담기지 않음).
 
 ### ✍️ 캡션 원칙
 
