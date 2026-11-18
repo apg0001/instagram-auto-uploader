@@ -20,6 +20,7 @@ def main(argv: list[str] | None = None) -> int:
                    help="lab-wars | agent-office | market:premarket | market:close | market:weekly | market:monthly")
     g.add_argument("--kind", choices=["REELS", "CAROUSEL", "STORIES"])
     g.add_argument("--stage", help="예: 3-10")
+    g.add_argument("--at", help="예약 게시 시각 (예: 2026-11-19T19:00). 승인 후 이 시각이 지나면 게시")
     tp = sub.add_parser("topic", help="주제를 조사해 카드뉴스 초안 생성 (claude -p + 웹 검색)")
     tp.add_argument("topic", help="예: '이번 주 AI 반도체 이슈 정리'")
     tp.add_argument("--design", choices=["template", "free"], default="template",
@@ -58,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd in ("generate", "topic", "post"):
         if args.cmd == "generate":
-            post = pl.generate(args.source, args.kind, args.stage)
+            post = pl.generate(args.source, args.kind, args.stage, args.at)
         elif args.cmd == "topic":
             post = pl.generate_topic(args.topic, args.design)
         else:
