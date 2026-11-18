@@ -33,6 +33,12 @@ def plain(rt: list[dict]) -> str:
     return "".join(t.get("plain_text", "") for t in rt)
 
 
+def iso_kst(ts: float) -> str:
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    return datetime.fromtimestamp(ts, ZoneInfo("Asia/Seoul")).isoformat(timespec="minutes")
+
+
 class Notion:
     def __init__(self, token: str, version: str):
         self.s = requests.Session()
@@ -93,6 +99,7 @@ class Notion:
                 "캡션": {"rich_text": rich(p.caption)},
                 "미디어": {"files": files},
                 "ID": {"rich_text": rich(p.id)},
+                **({"예약": {"date": {"start": iso_kst(p.scheduled_at)}}} if p.scheduled_at else {}),
             },
             "children": children,
         }
@@ -108,8 +115,10 @@ class Notion:
         }
 
     def update(self, page_id: str, *, status: str | None = None, permalink: str | None = None,
-               error: str | None = None) -> None:
+               error: str | None = None, scheduled: str | None = None) -> None:
         props: dict[str, Any] = {}
+        if scheduled:
+            props["예약"] = {"date": {"start": scheduled}}
         if status:
             props["상태"] = {"select": {"name": status}}
         if permalink:
