@@ -264,5 +264,39 @@ async def overview(url: str, out: Path) -> dict[str, Path]:
     return {k: v for k, v in s.items() if v.exists()}
 
 
+# 외전: (노드, 이름, 특수 규칙). 릴스에는 규칙이 눈에 잘 띄는 편만 고른다.
+SIDE_STORIES = [
+    ("S1-2", "조교수 생존기", "평가 시즌, 실적을 쌓아라"),
+    ("S2-3", "대학원 괴담", "정전! 아군 주변만 보인다"),
+    ("S4-2", "마감 24시", "4분 카운트다운"),
+    ("S5-2", "AI 시대의 연구실", "내가 소환한 유닛이 적 편에 복제된다"),
+    ("S7-2", "연구실 정전의 날", "수시로 찾아오는 순간 정전"),
+]
+
+
+async def side(url: str, out: Path, seconds: float = 16) -> tuple[Path | None, list[dict]]:
+    """외전 여러 편을 한 세션에서 녹화한다. 구간: [{node, name, rule, start, shot}] (start = 녹화 기준 초)."""
+    out.mkdir(parents=True, exist_ok=True)
+    segs: list[dict] = []
+    async with session(url, record_dir=out / "raw", unseen=tuple(f"st-{n}" for n, _, _ in SIDE_STORIES)) as page:
+        await to_map(page)
+        for i, (node, name, rule) in enumerate(SIDE_STORIES):
+            await chapter_tab(page, "외전")
+            if i == 0:
+                await page.screenshot(path=out / "side_map.png")
+            await open_node(page, node)
+            await click(page, "button.btn.primary", "출전", wait=2500)
+            await skip_cutscenes(page)
+            shot = out / f"{node}.png"
+            start = await battle(page, seconds, [shot], seed=11 + i)
+            segs.append({"node": node, "name": name, "rule": rule, "start": start, "shot": shot})
+            await leave_battle(page)
+    return getattr(page, "video_path", None), segs
+
+
+def run_side(url: str, out: Path) -> tuple[Path | None, list[dict]]:
+    return asyncio.run(side(url, out))
+
+
 def run_overview(url: str, out: Path) -> dict[str, Path]:
     return asyncio.run(overview(url, out))
