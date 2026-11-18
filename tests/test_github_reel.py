@@ -53,3 +53,21 @@ def test_bgm_is_deterministic_and_varies_by_seed():
     a, b, c = bgm.compose(6, 1), bgm.compose(6, 1), bgm.compose(6, 2)
     assert len(a) == 6 * bgm.SR and np.max(np.abs(a)) <= 0.81
     assert np.array_equal(a, b) and not np.array_equal(a, c)
+
+
+def test_insight_prefers_young_repo_then_share_then_daily():
+    r = gt.Repo("a/b", "", None, stars_week=700, stars_total=1000, rank=1)
+    assert gt.insight(r, {"created": "2026-11-10"}, date(2026, 11, 22)) == "만든 지 12일 만에 별 1,000개"
+    assert gt.insight(r, {"created": "2020-01-01"}, date(2026, 11, 22)) == "누적 별의 70%가 이번 주에"
+    big = gt.Repo("a/b", "", None, stars_week=700, stars_total=100000, rank=1)
+    assert gt.insight(big, {}, date(2026, 11, 22)) == "하루 평균 별 100개씩"
+
+
+def test_carousel_slides_cover_five_repos_summary_sources():
+    picks = [github_reel.Pick(gt.Repo(f"o/r{i}", "d", "Go", 500 - i, 9000, i + 1), {"desc": "x", "install": "npm i x"},
+                              {"org": i == 0}, {"new": None}, "f") for i in range(5)]
+    slides = github_reel.carousel_slides(picks, "흐름", "기간", date(2026, 11, 22))
+    assert [s[1]["kind"] for s in slides] == ["cover", "repo", "repo", "repo", "repo", "repo", "summary", "sources"]
+    assert slides[1][1]["org"] is True and slides[1][1]["install"] == "npm i x"
+    assert github_reel._install("```\nnpm i x\n```") == "npm i x"
+    assert github_reel._install("pip install a\npython -m a") == ""  # 여러 줄은 버린다

@@ -1,0 +1,69 @@
+{% extends "base.html.j2" %}
+{# 주간 깃허브 인기 레포 캐러셀: kind = cover | repo | summary | sources #}
+{% block style %}
+  .rank { margin-top: 26px; font-size: 130px; font-weight: 900; color: var(--accent); line-height: 1; letter-spacing: -0.04em; }
+  .owner { margin-top: 18px; font-size: 30px; color: var(--muted); font-weight: 600; }
+  .name { font-size: 78px; font-weight: 900; line-height: 1.12; letter-spacing: -0.03em; word-break: normal; overflow-wrap: anywhere; }
+  .name.long { font-size: 60px; }
+  .chips { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 10px; }
+  .chip { font-size: 24px; font-weight: 700; padding: 6px 16px; border-radius: 999px; background: var(--surface); color: var(--accent); border: 2px solid var(--accent); }
+  .chip.solid { background: var(--accent); color: #fff; }
+  .desc { margin-top: 28px; font-size: 42px; font-weight: 700; line-height: 1.4; word-break: keep-all; }
+  .who { margin-top: 12px; font-size: 29px; line-height: 1.5; color: var(--muted); font-weight: 500; word-break: keep-all; }
+  .stats { margin-top: 34px; display: grid; grid-template-columns: repeat(3, 1fr); background: var(--surface); border-radius: 24px; padding: 26px 10px; }
+  .stat { text-align: center; } .stat .l { font-size: 22px; color: var(--muted); font-weight: 600; }
+  .stat .v { margin-top: 6px; font-size: 46px; font-weight: 900; } .stat .v.a { color: var(--accent); }
+  .line { margin-top: 18px; font-size: 28px; font-weight: 700; }
+  .line span { color: var(--accent); }
+  pre { margin-top: 18px; font-family: "DejaVu Sans Mono", monospace; font-size: 22px; background: var(--ink); color: var(--paper); padding: 16px 20px; border-radius: 14px; white-space: pre-wrap; word-break: break-all; }
+  .feats { margin-top: 30px; display: flex; flex-direction: column; gap: 12px; }
+  .feats .h { font-size: 24px; font-weight: 800; color: var(--muted); }
+  .feats div.f { font-size: 31px; font-weight: 600; word-break: keep-all; } .feats div.f b { color: var(--accent); margin-right: 12px; }
+  .big { margin-top: 60px; font-size: 92px; font-weight: 900; line-height: 1.12; letter-spacing: -0.04em; word-break: keep-all; }
+  .top5 { font-size: 200px; font-weight: 900; color: var(--accent); letter-spacing: -0.05em; line-height: 1.1; }
+  .sub { margin-top: 20px; font-size: 32px; color: var(--muted); font-weight: 600; word-break: keep-all; }
+  .teaser { margin-top: 44px; display: flex; flex-direction: column; gap: 12px; }
+  .teaser div { font-size: 30px; font-weight: 700; } .teaser b { color: var(--accent); margin-right: 14px; }
+  .bars { margin-top: 40px; display: flex; flex-direction: column; gap: 26px; }
+  .bars .n { font-size: 28px; font-weight: 800; } .bars .n small { font-weight: 500; color: var(--muted); font-size: 22px; margin-left: 8px; }
+  .bars .t { display: flex; align-items: center; gap: 16px; margin-top: 8px; }
+  .bars .b { height: 34px; border-radius: 17px; background: var(--accent); }
+  .bars .v { font-size: 28px; font-weight: 900; white-space: nowrap; }
+  .trend { margin-top: 44px; font-size: 34px; font-weight: 800; padding: 22px 26px; background: var(--surface); border-left: 8px solid var(--accent); word-break: keep-all; }
+  .src { margin-top: 36px; display: flex; flex-direction: column; gap: 14px; font-size: 24px; word-break: break-all; }
+{% endblock %}
+{% block content %}
+{% if kind == "cover" %}
+  <div class="big">이번 주 깃허브<br>인기 레포</div>
+  <div class="top5">TOP 5</div>
+  <div class="sub">{{ period }}</div>
+  <div class="teaser">{% for t in teaser %}<div><b>{{ loop.index }}</b>{{ t }}</div>{% endfor %}</div>
+{% elif kind == "repo" %}
+  <div class="rank">{{ rank }}위</div>
+  <div class="owner">{{ owner }} /</div>
+  <div class="name{% if name|length > 16 %} long{% endif %}">{{ name }}</div>
+  <div class="chips">{% if org %}<span class="chip solid">{{ owner }} 공식</span>{% endif %}{% for t in tags %}<span class="chip">#{{ t }}</span>{% endfor %}</div>
+  <div class="desc">{{ desc }}</div>
+  {% if who %}<div class="who">이런 분께 · {{ who }}</div>{% endif %}
+  {% if features %}<div class="feats"><div class="h">이런 걸 해요</div>{% for f in features %}<div class="f"><b>✓</b>{{ f }}</div>{% endfor %}</div>{% endif %}
+  <div class="stats">
+    <div class="stat"><div class="l">이번 주 ★</div><div class="v a">+{{ "{:,}".format(week) }}</div></div>
+    <div class="stat"><div class="l">누적 ★</div><div class="v">{{ "{:,}".format(total) }}</div></div>
+    <div class="stat"><div class="l">언어</div><div class="v" style="font-size:32px;padding-top:6px">{{ lang or "-" }}</div></div>
+  </div>
+  <div class="line"><span>●</span> {{ insight }}</div>
+  {% if change %}<div class="line"><span>●</span> {{ change }}</div>{% endif %}
+  {% if install %}<pre>{{ install }}</pre>{% endif %}
+{% elif kind == "summary" %}
+  <h1>한눈에 보기</h1><h2>이번 주에 늘어난 별</h2>
+  <div class="bars">{% for b in bars %}
+    <div><div class="n">{{ loop.index }}. {{ b.name }}<small>{{ b.owner }}</small></div>
+      <div class="t"><div class="b" style="width: {{ (b.week / bars[0].week * 640)|int }}px"></div><div class="v">+{{ "{:,}".format(b.week) }}</div></div></div>
+  {% endfor %}</div>
+  {% if trend %}<div class="trend">이번 주 흐름 · {{ trend }}</div>{% endif %}
+{% else %}
+  <h1>출처 · 집계 기준</h1>
+  <div class="lead" style="margin-top:24px;font-size:28px;line-height:1.6">GitHub Trending(주간)에 오른 레포를 이번 주에 늘어난 별 순으로 다시 정렬했어요. 레포 설명은 각 README 기준이에요. 매주 일요일 업데이트.</div>
+  <div class="src">{% for s in sources %}<div>{{ s }}</div>{% endfor %}</div>
+{% endif %}
+{% endblock %}
