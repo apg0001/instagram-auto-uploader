@@ -163,6 +163,11 @@ def _view_specs(p: dict[str, str]) -> list[dict]:
              {"property_id": p[k], "visible": True} for k in ("제목", "상태", "주제", "형식", "예약", "오류")] + [
              {"property_id": p[k], "visible": False} for k in ("캡션", "미디어", "ID", "소스", "인스타 링크")]}},
         {"name": "📅 예약 달력", "type": "calendar", "configuration": {"type": "calendar", "date_property_id": p["예약"]}},
+        {"name": "🗓 주간 예약", "type": "timeline",  # 확대(시간·일·주)는 API로 못 정해 노션에서 한 번 '주'로
+         "filter": {"or": [{"property": status, "select": {"equals": s}} for s in ("초안", "승인")]},
+         "sorts": [{"property": "예약", "direction": "ascending"}],
+         "configuration": {"type": "timeline", "date_property_id": p["예약"], "properties": [
+             {"property_id": p[k], "visible": True} for k in ("주제", "형식", "상태")]}},
         {"name": "🖼 게시됨", "type": "gallery", "filter": {"property": status, "select": {"equals": "게시됨"}},
          "sorts": [{"property": "생성", "direction": "descending"}],
          "configuration": {"type": "gallery", "cover": {"type": "property", "property_id": p["미디어"]},

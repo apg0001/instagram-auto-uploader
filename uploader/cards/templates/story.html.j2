@@ -1,0 +1,68 @@
+{% extends "base.html.j2" %}
+{# 웹 조사 카드뉴스: 큰 글씨 + 주제 색 배경 장식 + 남는 아래 공간에 Claude가 그린 일러스트(art, 인라인 SVG).
+   kind = cover | points | stat. 일러스트가 없거나 공간이 모자라면 장식만 남는다. #}
+{% block style %}
+  body::before { content: ""; position: absolute; width: 620px; height: 620px; border-radius: 50%;
+    right: -220px; top: -240px; background: var(--accent); opacity: .08; }
+  body::after { content: ""; position: absolute; width: 380px; height: 380px; border-radius: 50%;
+    left: -170px; bottom: 60px; border: 34px solid var(--accent); opacity: .06; }
+  .page { z-index: 1; }
+  .kicker { margin-top: 40px; display: inline-block; align-self: flex-start; font-size: 24px; font-weight: 800;
+    color: var(--surface); background: var(--accent); padding: 8px 18px; border-radius: 999px; }
+  .cover-title { margin-top: 26px; font-size: 86px; font-weight: 900; line-height: 1.14; letter-spacing: -0.04em; word-break: keep-all; }
+  .cover-sub { margin-top: 24px; font-size: 36px; font-weight: 600; color: var(--muted); line-height: 1.45; word-break: keep-all; }
+  h1 { font-size: 60px; font-weight: 900; word-break: keep-all; letter-spacing: -0.035em; }
+  .lead { margin-top: 24px; font-size: 33px; line-height: 1.55; font-weight: 600; word-break: keep-all; }
+  .list { margin-top: 34px; display: flex; flex-direction: column; gap: 18px; }
+  .item { background: var(--surface); border-radius: 22px; padding: 22px 28px; border-left: 10px solid var(--accent); }
+  .head { font-size: 35px; font-weight: 800; line-height: 1.3; word-break: keep-all; }
+  .body { font-size: 29px; font-weight: 500; line-height: 1.5; color: var(--ink); opacity: .85; margin-top: 6px; word-break: keep-all; }
+  .teaser { margin-top: 40px; display: flex; flex-direction: column; gap: 18px; }
+  .teaser div { display: flex; align-items: center; gap: 18px; background: var(--surface); border-radius: 20px; padding: 24px 26px; }
+  .teaser b { flex: none; width: 52px; height: 52px; border-radius: 50%; background: var(--accent); color: var(--surface);
+    font-size: 28px; font-weight: 900; display: flex; align-items: center; justify-content: center; }
+  .teaser span { font-size: 35px; font-weight: 700; line-height: 1.35; word-break: keep-all; }
+  .value { margin-top: 40px; font-size: 150px; font-weight: 900; color: var(--accent); line-height: 1; letter-spacing: -0.05em; word-break: keep-all; }
+  .label { margin-top: 16px; font-size: 36px; font-weight: 700; color: var(--muted); }
+  .art { position: absolute; left: 80px; right: 80px; display: none; align-items: center; justify-content: center; z-index: 0; }
+  .art svg { width: 100%; height: 100%; }
+{% endblock %}
+{% block content %}
+  {% if kind == "cover" %}
+    {% if kicker %}<div class="kicker">{{ kicker }}</div>{% endif %}
+    <div class="cover-title">{{ title }}</div>
+    {% if subtitle %}<div class="cover-sub">{{ subtitle }}</div>{% endif %}
+    {% if teaser %}<div class="teaser">{% for x in teaser %}<div><b>{{ loop.index }}</b><span>{{ x }}</span></div>{% endfor %}</div>{% endif %}
+  {% elif kind == "stat" %}
+    <h1>{{ title }}</h1>
+    <div class="value">{{ value }}</div>
+    {% if label %}<div class="label">{{ label }}</div>{% endif %}
+    {% if body %}<div class="lead">{{ body }}</div>{% endif %}
+  {% else %}
+    <h1>{{ title }}</h1>
+    {% if lead %}<div class="lead">{{ lead }}</div>{% endif %}
+    {% if items %}<div class="list">
+      {% for it in items %}<div class="item">
+        {% if it.head %}<div class="head">{{ it.head }}</div>{% endif %}
+        {% if it.body %}<div class="body">{{ it.body }}</div>{% endif %}
+      </div>{% endfor %}
+    </div>{% endif %}
+  {% endif %}
+  {% if art %}<div class="art" id="art">{{ art|safe }}</div>
+  <script>
+    // 글이 끝난 곳부터 하단 문구 위까지 남는 공간에 일러스트를 맞춘다 (모자라면 숨김)
+    document.fonts.ready.then(() => {
+      const main = document.querySelector('.fit'), foot = document.querySelector('.foot'), art = document.getElementById('art');
+      const top = main.getBoundingClientRect().bottom + 28, bottom = foot.getBoundingClientRect().top - 28;
+      if (bottom - top >= {{ 170 if kind == "cover" else 260 }}) {
+        art.style.top = top + 'px'; art.style.height = (bottom - top) + 'px'; art.style.display = 'flex';
+      } else {
+        // 글이 많으면 제목 옆 오른쪽 위 작은 그림으로 (제목은 그만큼 비켜 줌)
+        const head = document.querySelector('h1, .cover-title');
+        if (head) head.style.paddingRight = '230px';
+        Object.assign(art.style, {top: '128px', left: 'auto', right: '56px', width: '210px', height: '210px', display: 'flex'});
+        if (main.getBoundingClientRect().bottom > foot.getBoundingClientRect().top - 24 && window.fit) window.fit();
+      }
+    });
+  </script>{% endif %}
+{% endblock %}
