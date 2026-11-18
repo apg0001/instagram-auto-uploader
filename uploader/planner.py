@@ -19,7 +19,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-from . import themes
+from . import themes, timetable
 from .caption import call_claude, parse_json
 from .notion import TOPIC_OPTIONS, prop_text, rich
 
@@ -163,6 +163,11 @@ def _view_specs(p: dict[str, str]) -> list[dict]:
              {"property_id": p[k], "visible": True} for k in ("제목", "상태", "주제", "형식", "예약", "오류")] + [
              {"property_id": p[k], "visible": False} for k in ("캡션", "미디어", "ID", "소스", "인스타 링크")]}},
         {"name": "📅 예약 달력", "type": "calendar", "configuration": {"type": "calendar", "date_property_id": p["예약"]}},
+        {"name": "🗓 주간 예약", "type": "timeline",  # 확대(시간·일·주)는 API로 못 정해 노션에서 한 번 '주'로
+         "filter": {"or": [{"property": status, "select": {"equals": s}} for s in ("초안", "승인")]},
+         "sorts": [{"property": "예약", "direction": "ascending"}],
+         "configuration": {"type": "timeline", "date_property_id": p["예약"], "properties": [
+             {"property_id": p[k], "visible": True} for k in ("주제", "형식", "상태")]}},
         {"name": "🖼 게시됨", "type": "gallery", "filter": {"property": status, "select": {"equals": "게시됨"}},
          "sorts": [{"property": "생성", "direction": "descending"}],
          "configuration": {"type": "gallery", "cover": {"type": "property", "property_id": p["미디어"]},
@@ -242,6 +247,12 @@ def setup_dashboard(pl: Pipeline) -> list[str]:
         pl.db.kv_set("notion_plan_db_id", plan_id)
         done.append("콘텐츠 기획 DB + 사용법")
         _plan_views(pl, plan_id)
+
+    # 4) 주간 타임테이블 (증시 크론 + 기획 표 + 단발 예약)
+    if not pl.db.kv_get("notion_timetable_db_id"):
+        timetable.ensure_db(pl, parent)
+        done.append("주간 타임테이블 표")
+    timetable.refresh(pl, n.query(plan_id), force=True)
     return done
 
 
@@ -405,3 +416,7 @@ def run(pl: Pipeline) -> None:
     for page in rows:
         if prop_text(page["properties"], "상태") == ACTIVE and run_due(pl, page, now, rows):
             break
+    try:
+        timetable.refresh(pl, rows)
+    except Exception:  # noqa: BLE001 — 표 갱신 실패가 생성을 막지 않게
+        log.exception("타임테이블 갱신 실패")
