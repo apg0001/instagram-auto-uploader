@@ -23,9 +23,17 @@ def payload(kind: str, media: list[dict[str, str]], caption: str, cover_url: str
         "image_url": images[0] if images else None,
         "video_url": videos[0] if videos else None,
         "cover_url": cover_url,
-        "media": [{"type": "VIDEO" if m["type"] == "video" else "IMAGE", "url": m["url"]} for m in media],
+        "media": [_item(m) for m in media],
         "count": len(media),
     }
+
+
+def _item(m: dict[str, str]) -> dict[str, str]:
+    """캐러셀 항목. Make 'Files' 항목의 내부 키 이름을 몰라 흔한 이름을 모두 넣는다 (남는 키는 무시됨)."""
+    video = m["type"] == "video"
+    t = "VIDEO" if video else "IMAGE"
+    return {"type": t, "media_type": t, "mediaType": t, "url": m["url"],
+            ("video_url" if video else "image_url"): m["url"]}
 
 
 class MakeWebhook:
