@@ -55,10 +55,16 @@ class Pipeline:
             media=[{"file": str(f), "url": u, "type": t} for f, u, t in zip(media, urls, types, strict=False)],
             meta={**(meta or {}), "cover_url": urls[-1] if cover else None},
         )
+        if self.auto_approved(source):
+            post.status = APPROVED  # 노션에는 '승인'으로 올라가고 다음 sync에서 게시 (노션에서 반려로 바꾸면 취소)
         self.db.save(post)  # 노션이 실패해도 초안은 남긴다 (sync가 다시 올림)
         self.push_to_notion([post])
-        log.info("초안 생성 완료 %s", pid)
+        log.info("%s 생성 완료 %s", "자동 승인" if post.status == APPROVED else "초안", pid)
         return post
+
+    def auto_approved(self, source: str) -> bool:
+        """config auto_approve 의 접두어로 시작하는 소스는 사람 승인 없이 게시한다."""
+        return any(source == a or source.startswith((a + ":", a + "-")) for a in self.cfg.raw.get("auto_approve") or [])
 
     def generate(self, source: str = "lab-wars", kind: str | None = None, stage: str | None = None) -> Post | None:
         if source.startswith("market"):

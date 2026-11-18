@@ -19,6 +19,10 @@ instagram:
   make_timeout: 300
   api_version: v24.0
 
+# 사람 승인 없이 바로 게시할 소스 (접두어). market = market:premarket/close/weekly/monthly 전부.
+# 게시 직전 캡션 검증(면책 문구·금지어·링크)은 그대로 거친다.
+auto_approve: [market]
+
 notion:
   # .env에 NOTION_TOKEN 이 있으면 자동으로 켜진다. DB id는 `notion-setup` 이 상태 DB에 저장한다.
   api_version: "2022-06-28"
