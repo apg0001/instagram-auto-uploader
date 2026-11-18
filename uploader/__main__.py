@@ -5,6 +5,7 @@ import argparse
 import fcntl
 import logging
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -49,12 +50,22 @@ def main(argv: list[str] | None = None) -> int:
                         handlers=[logging.StreamHandler(), logging.FileHandler(cfg.data_dir / "uploader.log")])
 
     # 동시 실행 방지 (cron에서 sync가 겹치거나 generate와 겹치지 않게)
+    # sync는 바로 포기(1분 뒤 다시 돈다), plan은 같은 분에 시작한 sync가 끝나길 최대 50초 기다린다.
     lock = open(cfg.data_dir / ".lock", "w")
-    try:
-        fcntl.flock(lock, fcntl.LOCK_EX | (fcntl.LOCK_NB if args.cmd in ("sync", "plan") else 0))
-    except BlockingIOError:
-        logging.info("다른 작업이 실행 중이라 건너뜀")
-        return 0
+    wait = {"sync": 0, "plan": 50}.get(args.cmd)
+    if wait is None:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+    else:
+        deadline = time.monotonic() + wait
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    logging.info("다른 작업이 실행 중이라 %s 건너뜀", args.cmd)
+                    return 0
+                time.sleep(2)
 
     from .pipeline import Pipeline  # Playwright 등 무거운 import는 필요할 때만
     pl = Pipeline(cfg)
