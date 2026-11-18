@@ -27,6 +27,11 @@ notion:
   # .env에 NOTION_TOKEN 이 있으면 자동으로 켜진다. DB id는 `notion-setup` 이 상태 DB에 저장한다.
   api_version: "2022-06-28"
 
+# 주간 깃허브 인기 레포 Top 5 릴스 (generate --source github-trending, 노션 기획 DB '생성기'로도 실행)
+github_trending:
+  voice: ko-KR-SunHiNeural      # edge-tts 한국어 음성 (InJoonNeural 남성, HyunsuMultilingualNeural 남성·영어 이름 발음 좋음)
+  rate: "+15%"
+
 caption:
   command: [claude, -p, --no-session-persistence, --output-format, text]
   model: null           # 예: sonnet / haiku. null이면 Claude Code 기본 모델
