@@ -100,8 +100,9 @@ class Pipeline:
             ov = compose.reel_overlay(compose.ReelText(
                 label="모바일 웹게임", title="랩워즈", subtitle=src["tagline"], scene=scene,
                 cta="설치 없이 브라우저에서 바로 · 프로필 링크"), out / "overlay.png")
-            reel = compose.make_reel(cap.video, cap.battle_start + 0.5, seconds, ov, out / "reel.mp4")
-            cover = compose.video_cover(reel, min(seconds / 2, 12), out / "cover.jpg")
+            body = compose.make_reel(cap.video, cap.battle_start + 0.5, seconds, ov, out / "body.mp4")
+            cover = compose.video_cover(body, min(seconds / 2, 12), out / "cover.jpg")
+            reel = compose.prepend_cover(body, cover, out / "reel.mp4")
             media, types = [reel], ["video"]
             slides_desc = [f"{scene} 전투 플레이 영상 {int(seconds)}초"]
         elif kind == "CAROUSEL":
@@ -159,8 +160,9 @@ class Pipeline:
                 scene="파일을 읽으면 도서관으로, 테스트를 돌리면 테스트 구역으로",
                 cta=f"{repo_short}  ·  프로필 링크"), out / "overlay.png",
                 video_h=compose.video_height(cap.crop), colors=colors)
-            reel = compose.make_reel(cap.video, cap.start + 0.3, seconds, ov, out / "reel.mp4", crop=cap.crop)
-            cover = compose.video_cover(reel, min(seconds / 2, 10), out / "cover.jpg")
+            body = compose.make_reel(cap.video, cap.start + 0.3, seconds, ov, out / "body.mp4", crop=cap.crop)
+            cover = compose.video_cover(body, min(seconds / 2, 10), out / "cover.jpg")
+            reel = compose.prepend_cover(body, cover, out / "reel.mp4")
             media, types = [reel], ["video"]
             slides_desc = [f"합성 데모 데이터로 돌아가는 사무실 화면 {int(seconds)}초 (캐릭터가 상태에 따라 구역을 이동)"]
         else:
