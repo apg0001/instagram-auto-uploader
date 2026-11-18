@@ -35,8 +35,17 @@ class Config:
         return self.raw["instagram"]
 
     @property
+    def ig_mode(self) -> str:
+        """graph = 공식 API(Meta 개발자 앱), make = Make 웹훅."""
+        return self.instagram.get("mode", "graph")
+
+    @property
     def ig_enabled(self) -> bool:
-        return bool(self.instagram.get("enabled")) and bool(os.getenv("IG_USER_ID")) and bool(os.getenv("IG_ACCESS_TOKEN"))
+        if not self.instagram.get("enabled"):
+            return False
+        if self.ig_mode == "make":
+            return bool(os.getenv("MAKE_WEBHOOK_URL"))
+        return bool(os.getenv("IG_USER_ID")) and bool(os.getenv("IG_ACCESS_TOKEN"))
 
     @property
     def notion_enabled(self) -> bool:

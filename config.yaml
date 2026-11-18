@@ -13,6 +13,10 @@ media:
 instagram:
   # 연동 전에는 false. true로 바꾸고 .env에 IG_USER_ID / IG_ACCESS_TOKEN 을 넣으면 실제 게시한다.
   enabled: false
+  # graph = 공식 API (.env IG_USER_ID / IG_ACCESS_TOKEN, Meta 개발자 앱 필요)
+  # make  = Make 웹훅 (.env MAKE_WEBHOOK_URL, 설정법: docs/make.md)
+  mode: graph
+  make_timeout: 300
   api_version: v24.0
 
 notion:

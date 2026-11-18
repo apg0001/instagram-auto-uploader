@@ -15,6 +15,7 @@ from . import compose
 from .config import Config
 from .db import APPROVED, DB, DRAFT, FAILED, PUBLISHED, REJECTED, Post
 from .instagram import Instagram
+from .make_webhook import MakeWebhook
 from .media_host import MediaHost
 from .notion import Notion
 from .sources import lab_wars
@@ -251,9 +252,11 @@ class Pipeline:
         return self._finalize(pid, "manual", kind, f"[직접] {title}", text, staged, types, cover, {"check": "none"})
 
     # ------------------------------------------------------------ 승인·게시
-    def _instagram(self) -> Instagram | None:
+    def _instagram(self) -> Instagram | MakeWebhook | None:
         if not self.cfg.ig_enabled:
             return None
+        if self.cfg.ig_mode == "make":
+            return MakeWebhook(os.environ["MAKE_WEBHOOK_URL"], int(self.cfg.instagram.get("make_timeout", 300)))
         token = self.db.kv_get("ig_token") or os.environ["IG_ACCESS_TOKEN"]
         return Instagram(os.environ["IG_USER_ID"], token, self.cfg.instagram.get("api_version", "v24.0"))
 
@@ -302,7 +305,10 @@ class Pipeline:
                 self.set_status(p, FAILED, error="캡션 검증 실패: " + ", ".join(problems))
                 continue
             try:
-                p.ig_media_id = ig.publish(p.kind, p.media, p.caption, p.meta.get("cover_url"))
+                if isinstance(ig, MakeWebhook):
+                    p.ig_media_id = ig.publish(p.kind, p.media, p.caption, p.meta.get("cover_url"), post_id=p.id)
+                else:
+                    p.ig_media_id = ig.publish(p.kind, p.media, p.caption, p.meta.get("cover_url"))
                 p.permalink = ig.permalink(p.ig_media_id)
                 self.set_status(p, PUBLISHED)
                 log.info("게시 완료 %s %s", p.id, p.permalink)
@@ -377,6 +383,9 @@ class Pipeline:
         ig = self._instagram()
         if not ig:
             log.info("인스타 연동이 꺼져 있어 토큰 갱신 건너뜀")
+            return
+        if isinstance(ig, MakeWebhook):
+            log.info("Make 모드 — 토큰은 Make가 관리하므로 갱신 건너뜀")
             return
         token, expires = ig.refresh_token()
         self.db.kv_set("ig_token", token)

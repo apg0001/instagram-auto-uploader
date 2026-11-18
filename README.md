@@ -67,7 +67,7 @@ flowchart LR
   ai --> host[ig-media 레포<br/>GitHub Pages URL]
   host --> notion[(노션<br/>초안)]
   notion -- 사람이 승인 --> sync[sync · 1분마다]
-  sync --> ig[(Instagram API)]
+  sync --> ig[(Instagram API / Make)]
   sync -. 7일 뒤 .-> clean[cleanup<br/>히스토리째 삭제]
 ```
 
@@ -129,6 +129,8 @@ cp .env.example .env    # 토큰 채우기
 
 개인 계정 하나에만 올리므로 App Review는 필요 없습니다. 연동 전에는 승인된 게시물이 '승인' 상태로 기다립니다. 장기 토큰(60일)은 매주 자동 갱신합니다.
 
+**Meta 개발자 등록이 막혔다면** — `instagram.mode: make` 로 [Make](https://www.make.com) 웹훅을 거쳐 게시할 수 있습니다. 개발자 앱 대신 페이스북 페이지 연결만 필요합니다. → [docs/make.md](docs/make.md)
+
 </details>
 
 ## ⌨️ 명령
@@ -182,6 +184,7 @@ uploader/
   media_host.py            ☁️ ig-media 업로드·Pages 대기·히스토리 정리
   notion.py                📝 노션 DB·초안·승인
   instagram.py             📷 Instagram Graph API 게시·토큰 갱신
+  make_webhook.py          🔗 Make 웹훅 게시 (개발자 계정 없이)
   pipeline.py              🔁 전체 흐름
 prompts/anthropic-skills/  📐 디자인 지침 (Apache-2.0, 출처 그대로)
 assets/fonts/              🔤 Pretendard (OFL)
