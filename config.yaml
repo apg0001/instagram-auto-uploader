@@ -19,9 +19,10 @@ instagram:
   make_timeout: 300
   api_version: v24.0
 
-# 사람 승인 없이 바로 게시할 소스 (접두어). market = market:premarket/close/weekly/monthly 전부.
-# 게시 직전 캡션 검증(면책 문구·금지어·링크)은 그대로 거친다.
-auto_approve: [market]
+# 사람 승인 없이 바로 게시할 소스 (접두어). market = market:premarket/close/weekly/monthly 전부, "*" = 모든 소스.
+# 게시 직전 캡션 검증(면책 문구·금지어·링크)은 그대로 거친다. 노션에서 '반려'로 바꾸면 게시 전까지는 취소된다.
+# 예약이 있는 게시물은 승인돼도 예약 시각까지 기다린다. (2026-11-18 사용자 결정: 전부 자동 승인)
+auto_approve: ["*"]
 
 notion:
   # .env에 NOTION_TOKEN 이 있으면 자동으로 켜진다. DB id는 `notion-setup` 이 상태 DB에 저장한다.

@@ -19,7 +19,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-from . import themes
+from . import themes, timetable
 from .caption import call_claude, parse_json
 from .notion import TOPIC_OPTIONS, prop_text, rich
 
@@ -242,6 +242,12 @@ def setup_dashboard(pl: Pipeline) -> list[str]:
         pl.db.kv_set("notion_plan_db_id", plan_id)
         done.append("콘텐츠 기획 DB + 사용법")
         _plan_views(pl, plan_id)
+
+    # 4) 주간 타임테이블 (증시 크론 + 기획 표 + 단발 예약)
+    if not pl.db.kv_get("notion_timetable_db_id"):
+        timetable.ensure_db(pl, parent)
+        done.append("주간 타임테이블 표")
+    timetable.refresh(pl, n.query(plan_id), force=True)
     return done
 
 
@@ -405,3 +411,7 @@ def run(pl: Pipeline) -> None:
     for page in rows:
         if prop_text(page["properties"], "상태") == ACTIVE and run_due(pl, page, now, rows):
             break
+    try:
+        timetable.refresh(pl, rows)
+    except Exception:  # noqa: BLE001 — 표 갱신 실패가 생성을 막지 않게
+        log.exception("타임테이블 갱신 실패")
