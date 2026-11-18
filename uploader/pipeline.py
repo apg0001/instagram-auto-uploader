@@ -81,7 +81,7 @@ class Pipeline:
         raise ValueError(f"모르는 소스: {source} (lab-wars | agent-office | github-trending | market:premarket|close|weekly|monthly)")
 
     def generate_github(self, scheduled_at: float | None = None) -> Post:
-        """주간 깃허브 인기 레포 Top 5 릴스 (TTS 내레이션 + 합성 BGM)."""
+        """주간 깃허브 인기 레포 Top 5: 릴스(릴스 탭, TTS + 합성 BGM) + 캐러셀(피드) 두 개를 만든다. 릴스 초안을 돌려준다."""
         from . import github_reel
         from .sources import github_trending as gt
 
@@ -93,12 +93,19 @@ class Pipeline:
         snaps = self.cfg.data_dir / "github-trending"
         prev = gt.previous(snaps, day)
         gt.save(repos, snaps, day)
-        readmes = {r.name: gt.readme(r.name) for r in repos[:9]}
-        reel, cover, text, desc = github_reel.build(
-            repos, prev, readmes, day, work / "out", self.cfg.caption,
-            voice_name=src.get("voice", "ko-KR-SunHiNeural"), rate=src.get("rate", "+15%"))
-        return self._finalize(pid, "tech-github", "REELS", f"[깃허브 Top 5] {day:%m/%d}", text, [reel], ["video"],
-                              cover, {"check": "none", "slides": desc, "topic_theme": "tech"}, scheduled_at)
+        cands = repos[:9]
+        readmes = {r.name: gt.readme(r.name) for r in cands}
+        metas = {r.name: gt.details(r.name) for r in cands}
+        res = github_reel.build(repos, prev, readmes, metas, day, work / "out", self.cfg.caption,
+                                voice_name=src.get("voice", "ko-KR-SunHiNeural"), rate=src.get("rate", "+15%"))
+        meta = {"check": "none", "slides": res.desc, "topic_theme": "tech"}
+        reel = self._finalize(pid, "tech-github", "REELS", f"[깃허브 Top 5 · 릴스] {day:%m/%d}", res.reel_caption,
+                              [res.reel], ["video"], res.cover, meta, scheduled_at)
+        cid = pid.replace("-reels", "-carousel")
+        (self.cfg.data_dir / "posts" / cid).mkdir(parents=True, exist_ok=True)
+        self._finalize(cid, "tech-github", "CAROUSEL", f"[깃허브 Top 5 · 캐러셀] {day:%m/%d}", res.carousel_caption,
+                       res.carousel, ["image"] * len(res.carousel), None, meta, scheduled_at)
+        return reel
 
     def generate_game(self, source: str, kind: str | None, stage: str | None) -> Post:
         src = self.cfg.source(source)
@@ -164,8 +171,10 @@ class Pipeline:
     def generate_tour(self, feature: str, scheduled_at: float | None = None) -> Post:
         """랩워즈 기능 소개 시리즈 (overview 등). scheduled_at 이 있으면 그 시각 이후에 게시."""
         src = self.cfg.source("lab-wars")
+        if feature == "side":
+            return self.tour_side(src, scheduled_at)
         if feature != "overview":
-            raise ValueError(f"모르는 랩워즈 소개: {feature} (overview)")
+            raise ValueError(f"모르는 랩워즈 소개: {feature} (overview | side)")
         pid, work = self._new_id("lab-wars", "carousel")
         out = work / "out"
         log.info("생성 시작 %s (소개: %s)", pid, feature)
@@ -197,6 +206,39 @@ class Pipeline:
         post = self._finalize(pid, "lab-wars", "CAROUSEL", "[소개] 랩워즈 전체 소개", text, media,
                               ["image"] * len(media), None, {"tour": feature, "check": "link"},
                               scheduled_at=scheduled_at)
+        return post
+
+    def tour_side(self, src: dict, scheduled_at: float | None) -> Post:
+        """소개 시리즈: 외전 7편 릴스. 편마다 이름·특수 규칙을 바꿔 가며 전투 장면을 이어 붙이고 BGM을 깐다."""
+        from . import bgm
+
+        pid, work = self._new_id("lab-wars", "reels")
+        out = work / "out"
+        log.info("생성 시작 %s (소개: 외전)", pid)
+        video, segs = lab_wars_tour.run_side(src["play_url"], work / "capture")
+        if not video:
+            raise RuntimeError("녹화 파일이 없음")
+        clip, lead = 6.0, 7.0  # 전투 시작 7초 뒤(유닛이 깔린 뒤)부터 6초씩
+        parts: list[Path] = []
+        for i, sg in enumerate(segs):
+            k = sg["node"][1:].split("-")[0]
+            ov = compose.reel_overlay(compose.ReelText(
+                label="외전 7편 공개", title="랩워즈 외전", subtitle="엔딩 뒤 이야기, 편마다 다른 특수 규칙",
+                scene=f"외전 {k} · {sg['name']}\n{sg['rule']}", cta="설치 없이 브라우저에서 바로 · 프로필 링크"),
+                out / f"overlay{i}.png", theme=GAME)
+            parts.append(compose.make_reel(video, sg["start"] + lead, clip, ov, work / f"part{i}.mp4"))
+        body = compose.concat(parts, work / "body_silent.mp4")
+        total = clip * len(parts)
+        music = bgm.write(total, int(datetime.now(self.tz).strftime("%Y%m%d")) + 7, work / "bgm.wav")
+        body = compose.replace_audio(body, music, out / "body.mp4", volume=0.8)
+        cover = compose.video_cover(body, clip * 2 + clip / 2, out / "cover.jpg")  # 마감 24시(타이머) 장면
+        reel = compose.prepend_cover(body, cover, out / "reel.mp4")
+        slides_desc = [f"외전 {sg['node'][1:].split('-')[0]} {sg['name']} — {sg['rule']} (전투 {int(clip)}초)" for sg in segs]
+        scene = "랩워즈 외전 7편 소개 (엔딩 뒤 이야기, 편마다 특수 규칙. 영상에는 그중 5편)"
+        text = captions.generate(src, self.cfg.caption, "REELS", scene, slides_desc, self.db.recent_captions("lab-wars"))
+        post = self._finalize(pid, "lab-wars", "REELS", "[소개] 랩워즈 외전 7편", text, [reel], ["video"], cover,
+                              {"tour": "side", "check": "link"}, scheduled_at=scheduled_at)
+        shutil.rmtree(work / "capture" / "raw", ignore_errors=True)
         return post
 
     def generate_repo(self, source: str, kind: str | None) -> Post:

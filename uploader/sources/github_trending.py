@@ -97,3 +97,32 @@ def change(r: Repo, prev: dict[str, Repo]) -> dict:
     if not p:
         return {"new": True, "prev_rank": None, "prev_week": None, "diff_week": None}
     return {"new": False, "prev_rank": p.rank, "prev_week": p.stars_week, "diff_week": r.stars_week - p.stars_week}
+
+
+def details(name: str) -> dict:
+    """공개 API로 레포 정보: 조직 계정 여부, 만든 날, 라이선스, 토픽. 실패하면 빈 dict."""
+    try:
+        r = requests.get(f"https://api.github.com/repos/{name}", timeout=20,
+                         headers={**UA, "Accept": "application/vnd.github+json"})
+        if not r.ok:
+            return {}
+        d = r.json()
+        return {"org": (d.get("owner") or {}).get("type") == "Organization",
+                "created": (d.get("created_at") or "")[:10],
+                "license": ((d.get("license") or {}).get("spdx_id") or "").replace("NOASSERTION", ""),
+                "topics": d.get("topics") or []}
+    except requests.RequestException:
+        return {}
+
+
+def insight(r: Repo, meta: dict, day: date) -> str:
+    """데이터로 계산한 흥미로운 숫자 한 줄."""
+    if meta.get("created"):
+        age = (day - date.fromisoformat(meta["created"])).days
+        if 0 <= age <= 60:
+            return f"만든 지 {age}일 만에 별 {r.stars_total:,}개"
+    if r.stars_total:
+        share = r.stars_week / r.stars_total * 100
+        if share >= 15:
+            return f"누적 별의 {share:.0f}%가 이번 주에"
+    return f"하루 평균 별 {r.stars_week // 7:,}개씩"
