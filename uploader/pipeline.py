@@ -62,8 +62,9 @@ class Pipeline:
         return post
 
     def auto_approved(self, source: str) -> bool:
-        """config auto_approve 의 접두어로 시작하는 소스는 사람 승인 없이 게시한다."""
-        return any(source == a or source.startswith((a + ":", a + "-")) for a in self.cfg.raw.get("auto_approve") or [])
+        """config auto_approve 의 접두어로 시작하는 소스는 사람 승인 없이 게시한다. '*' 이면 전부."""
+        prefixes = self.cfg.raw.get("auto_approve") or []
+        return "*" in prefixes or any(source == a or source.startswith((a + ":", a + "-")) for a in prefixes)
 
     def generate(self, source: str = "lab-wars", kind: str | None = None, stage: str | None = None,
                  at: str | None = None) -> Post | None:

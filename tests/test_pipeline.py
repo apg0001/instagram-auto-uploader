@@ -22,3 +22,12 @@ def test_auto_approve_matches_market_sources():
     assert not p.auto_approved("lab-wars") and not p.auto_approved("marketing")
     p.cfg = Config({})
     assert not p.auto_approved("market-close")
+
+
+def test_auto_approve_star_means_everything():
+    from uploader.config import Config
+    from uploader.pipeline import Pipeline
+
+    p = Pipeline.__new__(Pipeline)
+    p.cfg = Config({"auto_approve": ["*"]})
+    assert p.auto_approved("lab-wars") and p.auto_approved("plan-tech") and p.auto_approved("manual")
