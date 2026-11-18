@@ -97,6 +97,13 @@ class DB:
         ).fetchall()
         return [r[0] for r in rows]
 
+    def titles(self, prefix: str, n: int = 40) -> list[str]:
+        """제목이 prefix로 시작하는 최근 게시물 제목 (반려 제외) — 시리즈가 이미 다룬 주제."""
+        rows = self.conn.execute(
+            "SELECT title FROM posts WHERE substr(title, 1, ?) = ? AND status != '반려' ORDER BY created_at DESC LIMIT ?",
+            (len(prefix), prefix, n)).fetchall()
+        return [r[0] for r in rows]
+
     def count_source(self, source: str) -> int:
         return self.conn.execute("SELECT COUNT(*) FROM posts WHERE source=?", (source,)).fetchone()[0]
 
