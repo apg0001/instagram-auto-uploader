@@ -31,7 +31,7 @@ Meta 개발자 계정 없이 인스타에 게시하는 방법입니다. 노션�
    curl -s -X POST "$MAKE_WEBHOOK_URL" -H 'Content-Type: application/json' -d '{
      "post_id":"test","kind":"TEST","caption":"테스트","image_url":"https://apg0001.github.io/ig-media/x.jpg",
      "video_url":"https://apg0001.github.io/ig-media/x.mp4","cover_url":"https://apg0001.github.io/ig-media/c.jpg",
-     "media":[{"type":"IMAGE","url":"https://apg0001.github.io/ig-media/x.jpg"},{"type":"VIDEO","url":"https://apg0001.github.io/ig-media/x.mp4"}],
+     "media":[{"type":"IMAGE","media_type":"IMAGE","mediaType":"IMAGE","url":"https://apg0001.github.io/ig-media/x.jpg","image_url":"https://apg0001.github.io/ig-media/x.jpg"},{"type":"VIDEO","media_type":"VIDEO","mediaType":"VIDEO","url":"https://apg0001.github.io/ig-media/x.mp4","video_url":"https://apg0001.github.io/ig-media/x.mp4"}],
      "count":2}'
    ```
    `.env`의 값을 쓰려면 먼저 `set -a; . ./.env; set +a` 를 실행하세요.
