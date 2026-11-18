@@ -1,3 +1,4 @@
+import pytest
 from PIL import Image
 
 from uploader import compose, themes
@@ -22,6 +23,7 @@ def test_css_has_card_variables():
     assert "up" not in themes.css("market")           # 증시는 빨강·파랑 기본값 유지
 
 
+@pytest.mark.skipif(not (compose.FONT_DIR / "NotoSansCJK-Bold.ttc").exists(), reason="CJK 글꼴 없음 (CI)")
 def test_slide_uses_theme_colors(tmp_path):
     for name, t in themes.THEMES.items():
         out = compose.slide(None, "제목", "본문", tmp_path / f"{name}.jpg", "footer", theme=t)
