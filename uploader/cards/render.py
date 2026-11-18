@@ -74,8 +74,10 @@ def env() -> Environment:
     return e
 
 
-def render(slides: list[tuple[str, dict[str, Any]]], out_dir: Path, prefix: str = "") -> list[Path]:
-    """slides: [(템플릿 이름, 컨텍스트)]. JPEG 경로 목록을 돌려준다 (인스타 이미지는 JPEG만)."""
+def render(slides: list[tuple[str, dict[str, Any]]], out_dir: Path, prefix: str = "",
+           theme: dict[str, str] | None = None) -> list[Path]:
+    """slides: [(템플릿 이름, 컨텍스트)]. JPEG 경로 목록을 돌려준다 (인스타 이미지는 JPEG만).
+    theme: 주제 색 CSS 변수(themes.css). 슬라이드 컨텍스트에 theme 이 있으면 그쪽이 우선."""
     from playwright.sync_api import sync_playwright
 
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -85,7 +87,7 @@ def render(slides: list[tuple[str, dict[str, Any]]], out_dir: Path, prefix: str 
         browser = p.chromium.launch()
         page = browser.new_page(viewport={"width": SIZE[0], "height": SIZE[1]}, device_scale_factor=1)
         for i, (name, ctx) in enumerate(slides, 1):
-            html = e.get_template(f"{name}.html.j2").render(page_no=i, page_total=len(slides), **ctx)
+            html = e.get_template(f"{name}.html.j2").render(page_no=i, page_total=len(slides), **{"theme": theme, **ctx})
             src = Path(tmp) / f"{i}.html"
             src.write_text(html, encoding="utf-8")
             page.goto(src.as_uri())

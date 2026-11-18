@@ -38,6 +38,8 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("id", help="게시물 id (앞부분만 써도 됨)")
     sub.add_parser("cleanup", help="보존 기한 지난 미디어 삭제")
     sub.add_parser("refresh-token", help="인스타 장기 토큰 갱신")
+    sub.add_parser("notion-dashboard", help="노션 게시물 DB에 주제·보기를 만들고 콘텐츠 기획 DB를 붙인다")
+    sub.add_parser("plan", help="노션 콘텐츠 기획 처리: 새 요청 다듬기 + 때가 된 정기 초안 생성")
     n = sub.add_parser("notion-setup", help="노션 페이지 아래에 게시물 DB 생성")
     n.add_argument("parent", help="통합을 연결한 노션 페이지 URL 또는 id")
     args = ap.parse_args(argv)
@@ -49,7 +51,7 @@ def main(argv: list[str] | None = None) -> int:
     # 동시 실행 방지 (cron에서 sync가 겹치거나 generate와 겹치지 않게)
     lock = open(cfg.data_dir / ".lock", "w")
     try:
-        fcntl.flock(lock, fcntl.LOCK_EX | (fcntl.LOCK_NB if args.cmd == "sync" else 0))
+        fcntl.flock(lock, fcntl.LOCK_EX | (fcntl.LOCK_NB if args.cmd in ("sync", "plan") else 0))
     except BlockingIOError:
         logging.info("다른 작업이 실행 중이라 건너뜀")
         return 0
@@ -86,6 +88,12 @@ def main(argv: list[str] | None = None) -> int:
         pl.cleanup()
     elif args.cmd == "refresh-token":
         pl.refresh_token()
+    elif args.cmd == "notion-dashboard":
+        from . import planner
+        print("\n".join(planner.setup_dashboard(pl)) or "이미 다 있음")
+    elif args.cmd == "plan":
+        from . import planner
+        planner.run(pl)
     elif args.cmd == "notion-setup":
         print("노션 DB 생성:", pl.setup_notion(args.parent))
     return 0

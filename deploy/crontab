@@ -6,21 +6,24 @@ APP=/home/gichan/instagram-auto-uploader
 
 # ── 증시 (휴장일·월말 여부는 코드가 판단해서 건너뜀) ──────────────────
 # 평일 07:30 장 시작 전 브리핑 (09:00까지 승인 안 하면 자동 반려)
-30 7 * * 1-5   cd $APP && .venv/bin/python -m uploader generate --source market:premarket >> data/cron.log 2>&1
+30 7 * * 1-5   cd $APP && nice -n 19 .venv/bin/python -m uploader generate --source market:premarket >> data/cron.log 2>&1
 # 평일 16:00 장 마감 시황 (다음 날 08:30까지 승인)
-0 16 * * 1-5   cd $APP && .venv/bin/python -m uploader generate --source market:close >> data/cron.log 2>&1
+0 16 * * 1-5   cd $APP && nice -n 19 .venv/bin/python -m uploader generate --source market:close >> data/cron.log 2>&1
 # 토요일 09:00 주간 리포트
-0 9 * * 6      cd $APP && .venv/bin/python -m uploader generate --source market:weekly >> data/cron.log 2>&1
+0 9 * * 6      cd $APP && nice -n 19 .venv/bin/python -m uploader generate --source market:weekly >> data/cron.log 2>&1
 # 평일 16:40 월간 리포트 (월말 마지막 거래일에만 만들어짐)
-40 16 * * 1-5  cd $APP && .venv/bin/python -m uploader generate --source market:monthly >> data/cron.log 2>&1
+40 16 * * 1-5  cd $APP && nice -n 19 .venv/bin/python -m uploader generate --source market:monthly >> data/cron.log 2>&1
 
 # ── 프로젝트 소개 (형식은 릴스·캐러셀 번갈아) ─────────────────────────
-0 12 * * 2,5   cd $APP && .venv/bin/python -m uploader generate --source lab-wars >> data/cron.log 2>&1
-0 12 * * 3     cd $APP && .venv/bin/python -m uploader generate --source agent-office >> data/cron.log 2>&1
+# 랩워즈: 기능 소개 시리즈(예약 게시) 기간 동안 정기 생성 중지. 다시 켜려면 아래 주석 해제
+# 0 12 * * 2,5   cd $APP && nice -n 19 .venv/bin/python -m uploader generate --source lab-wars >> data/cron.log 2>&1
+# Agent Office: 소개 게시물은 이미 올렸으므로 정기 생성 없음. 새 릴리즈 때 수동으로 generate --source agent-office
 
 # ── 운영 ─────────────────────────────────────────────────────────────
 # 1분마다 노션 승인 결과 반영 + 승인 건 게시 (장 시작 전 브리핑이 늦지 않게)
 * * * * *      cd $APP && .venv/bin/python -m uploader sync >> data/cron.log 2>&1
+# 노션 콘텐츠 기획: 새 요청 다듬기 + 때가 된 정기 초안 생성 (한 번에 1개)
+*/5 * * * *    cd $APP && nice -n 19 .venv/bin/python -m uploader plan >> data/cron.log 2>&1
 # 매일 새벽 보존 기한(7일) 지난 미디어 삭제
 30 4 * * *     cd $APP && .venv/bin/python -m uploader cleanup >> data/cron.log 2>&1
 # 매주 월요일 인스타 장기 토큰 갱신 (연동 전에는 아무것도 안 함)

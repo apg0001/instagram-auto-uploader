@@ -13,11 +13,18 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-BG = (243, 235, 221)
-INK = (40, 33, 45)
-SUB = (110, 98, 112)
-ACCENT = (255, 112, 67)
-CARD = (255, 251, 244)
+from . import themes
+
+DEFAULT_TOPIC = "game"
+BAND = 14  # 상단 주제 색 띠 두께
+
+
+def _t(theme: dict | None) -> dict:
+    return {**themes.get(DEFAULT_TOPIC), **(theme or {})}
+
+
+def band(draw: ImageDraw.ImageDraw, width: int, color) -> None:
+    draw.rectangle((0, 0, width, BAND - 1), fill=color)
 
 FONT_DIR = Path("/usr/share/fonts/opentype/noto")
 
@@ -67,12 +74,12 @@ def text_block(draw: ImageDraw.ImageDraw, text: str, f: ImageFont.FreeTypeFont, 
     return y
 
 
-def chip(draw: ImageDraw.ImageDraw, text: str, cx: int, y: int, size: int = 34) -> int:
+def chip(draw: ImageDraw.ImageDraw, text: str, cx: int, y: int, size: int = 34, color=None) -> int:
     f = font(size)
     w = draw.textlength(text, font=f)
     pad_x, pad_y = 26, 12
     box = (cx - w / 2 - pad_x, y, cx + w / 2 + pad_x, y + size + pad_y * 2)
-    draw.rounded_rectangle(box, radius=(size + pad_y * 2) // 2, fill=ACCENT)
+    draw.rounded_rectangle(box, radius=(size + pad_y * 2) // 2, fill=color or _t(None)["accent"])
     draw.text((cx - w / 2, y + pad_y - size * 0.12), text, font=f, fill="white")
     return int(box[3])
 
@@ -107,13 +114,14 @@ class ReelText:
 VIDEO_Y = 640  # 1080x608 게임 화면이 놓이는 y
 
 
-def reel_overlay(t: ReelText, out: Path, video_h: int = 608, colors: dict | None = None) -> Path:
-    """video_h: 가운데 들어갈 영상 높이(폭 1080 기준). colors로 배경·글자색을 바꿀 수 있다."""
-    c = {"bg": BG, "ink": INK, "sub": SUB, "card": CARD, **(colors or {})}
+def reel_overlay(t: ReelText, out: Path, video_h: int = 608, theme: dict | None = None) -> Path:
+    """video_h: 가운데 들어갈 영상 높이(폭 1080 기준). theme: themes.get(주제)."""
+    c = _t(theme)
     W, H = 1080, 1920
     img = Image.new("RGB", (W, H), c["bg"])
     d = ImageDraw.Draw(img)
-    y = chip(d, t.label, W // 2, 190)
+    band(d, W, c["accent"])
+    y = chip(d, t.label, W // 2, 190, color=c["accent"])
     y = text_block(d, t.title, font(120), y + 36, c["ink"], 980, W, 1.32)
     text_block(d, t.subtitle, font(46, bold=False), y + 10, c["sub"], 960, W)
     # 영상 자리 (가장자리 그림자)
@@ -187,33 +195,39 @@ def video_cover(video: Path, at: float, out: Path) -> Path:
 
 # ---------------------------------------------------------------- 이미지
 
-def slide(shot: Path | None, heading: str, body: str, out: Path, footer: str, size=(1080, 1350)) -> Path:
+def slide(shot: Path | None, heading: str, body: str, out: Path, footer: str, size=(1080, 1350),
+          theme: dict | None = None) -> Path:
+    c = _t(theme)
     W, H = size
-    img = Image.new("RGB", (W, H), BG)
+    img = Image.new("RGB", (W, H), c["bg"])
     d = ImageDraw.Draw(img)
-    y = text_block(d, heading, font(70), 120, INK, 960, W, 1.2)
+    band(d, W, c["accent"])
+    y = text_block(d, heading, font(70), 120, c["ink"], 960, W, 1.2)
     if body:
-        y = text_block(d, body, font(40, bold=False), y + 10, SUB, 940, W, 1.4)
+        y = text_block(d, body, font(40, bold=False), y + 10, c["sub"], 940, W, 1.4)
     if shot:
         card = framed(Image.open(shot), 960)
         top = max(y + 10, (H - card.height) // 2 + 80)
         img.paste(card, ((W - card.width) // 2, min(top, H - card.height - 70)), card)
     f = font(32, bold=False)
     w = d.textlength(footer, font=f)
-    d.text(((W - w) / 2, H - 80), footer, font=f, fill=SUB)
+    d.text(((W - w) / 2, H - 80), footer, font=f, fill=c["sub"])
     img.save(out, "JPEG", quality=92)
     return out
 
 
-def cta_slide(title: str, lines: list[str], url: str, out: Path, size=(1080, 1350)) -> Path:
+def cta_slide(title: str, lines: list[str], url: str, out: Path, size=(1080, 1350),
+              theme: dict | None = None) -> Path:
+    c = _t(theme)
     W, H = size
-    img = Image.new("RGB", (W, H), BG)
+    img = Image.new("RGB", (W, H), c["bg"])
     d = ImageDraw.Draw(img)
+    band(d, W, c["accent"])
     y = H // 2 - 260
-    y = text_block(d, title, font(84), y, INK, 960, W, 1.2)
+    y = text_block(d, title, font(84), y, c["ink"], 960, W, 1.2)
     for line in lines:
-        y = text_block(d, line, font(44, bold=False), y + 16, SUB, 940, W)
-    y = chip(d, "프로필 링크에서 바로 플레이", W // 2, y + 70, 40)
-    text_block(d, url, font(34, bold=False), y + 30, SUB, 1000, W)
+        y = text_block(d, line, font(44, bold=False), y + 16, c["sub"], 940, W)
+    y = chip(d, "프로필 링크에서 바로 플레이", W // 2, y + 70, 40, color=c["accent"])
+    text_block(d, url, font(34, bold=False), y + 30, c["sub"], 1000, W)
     img.save(out, "JPEG", quality=92)
     return out

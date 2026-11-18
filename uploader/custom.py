@@ -28,7 +28,7 @@ CONTENT_PROMPT = """너는 한국어 인스타그램 카드뉴스 에디터다. 
 1. 웹 검색으로 최신·정확한 사실을 모은다. 출처가 확인된 내용만 쓴다. 불확실하면 빼거나 "확인되지 않음"이라고 쓴다.
 2. 슬라이드 {n_min}~{n_max}장. 1장은 표지(한 줄 제목 + 부제), 마지막 장은 정리 또는 출처.
 3. 한 장에 한 가지 메시지. 문장은 짧게, 한 항목 60자 이내.
-4. 캡션: 첫 줄 훅 → 핵심 3~5줄 → 출처 표기 → 해시태그 6~12개. 1500자 이내. 이모지 3개 이하.
+4. 캡션: 첫 줄 훅 → 핵심 3~5줄 → 출처 표기 → 해시태그 4~5개(관련성 높은 것만). 1500자 이내. 이모지 3개 이하.
 
 # 출력 (JSON 하나만)
 {{"title": "게시물 제목(관리용)",
@@ -133,10 +133,11 @@ def free_design(content: dict[str, Any], cfg: dict[str, Any], out_dir: Path) -> 
     return paths
 
 
-def make_topic(topic: str, cfg: dict[str, Any], out_dir: Path, design: str = "template") -> tuple[dict[str, Any], list[Path]]:
+def make_topic(topic: str, cfg: dict[str, Any], out_dir: Path, design: str = "template",
+               theme: dict[str, str] | None = None) -> tuple[dict[str, Any], list[Path]]:
     content = research(topic, cfg)
     (out_dir.parent / "content.json").write_text(json.dumps(content, ensure_ascii=False, indent=1), encoding="utf-8")
-    paths = free_design(content, cfg, out_dir) if design == "free" else render(template_slides(content), out_dir)
+    paths = free_design(content, cfg, out_dir) if design == "free" else render(template_slides(content), out_dir, theme=theme)
     return content, paths
 
 
