@@ -11,7 +11,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from . import caption as captions
-from . import compose
+from . import compose, themes
 from .config import Config
 from .db import APPROVED, DB, DRAFT, FAILED, PUBLISHED, REJECTED, Post
 from .instagram import Instagram
@@ -24,10 +24,8 @@ log = logging.getLogger("uploader")
 
 KIND_ROTATION = ["REELS", "CAROUSEL"]
 FOOTER = "랩워즈 · Lab Wars"
+GAME = themes.get("game")
 MARKET_REPORTS = ("premarket", "close", "weekly", "monthly")
-# Agent Office 카드뉴스 색: 제품 화면(남색 바탕 + 노란 배지)에서 가져온다
-AO_THEME = {"paper": "#1C1F33", "surface": "#262A44", "ink": "#F2F0E6", "muted": "#9AA0BF", "rule": "#3A3F63",
-            "up": "#F5C542", "down": "#7FA7FF"}
 
 
 class Pipeline:
@@ -103,7 +101,7 @@ class Pipeline:
                 raise RuntimeError("녹화 파일이 없음")
             ov = compose.reel_overlay(compose.ReelText(
                 label="모바일 웹게임", title="랩워즈", subtitle=src["tagline"], scene=scene,
-                cta="설치 없이 브라우저에서 바로 · 프로필 링크"), out / "overlay.png")
+                cta="설치 없이 브라우저에서 바로 · 프로필 링크"), out / "overlay.png", theme=GAME)
             body = compose.make_reel(cap.video, cap.battle_start + 0.5, seconds, ov, out / "body.mp4")
             cover = compose.video_cover(body, min(seconds / 2, 12), out / "cover.jpg")
             reel = compose.prepend_cover(body, cover, out / "reel.mp4")
@@ -118,17 +116,17 @@ class Pipeline:
                 (cap.map_shot, "7챕터 70스테이지", "학부생 · 학연생 · 학석사 · 석사 · 석박 · 박사 · 포닥"),
             ]
             for i, (shot, head, body) in enumerate([p for p in plan if p[0]]):
-                media.append(compose.slide(shot, head, body, out / f"{i + 1}.jpg", FOOTER))
+                media.append(compose.slide(shot, head, body, out / f"{i + 1}.jpg", FOOTER, theme=GAME))
                 slides_desc.append(f"{head} — {body}")
-            media.append(compose.cta_slide("지금 바로 플레이", ["모바일 가로 화면 추천", "설치 없이 브라우저에서"],
+            media.append(compose.cta_slide("지금 바로 플레이", ["폰 가로 · 세로 모두 지원", "설치 없이 브라우저에서"],
                                            src["play_url"].removeprefix("https://").rstrip("/"),
-                                           out / f"{len(media) + 1}.jpg"))
+                                           out / f"{len(media) + 1}.jpg", theme=GAME))
             slides_desc.append("마지막: 플레이 링크 안내")
             types = ["image"] * len(media)
         elif kind == "STORIES":
             shot = cap.battle_shots[0] if cap.battle_shots else cap.story_shot
             media = [compose.slide(shot, src["tagline"], f"{scene}\n프로필 링크에서 바로 플레이",
-                                   out / "story.jpg", FOOTER, size=(1080, 1920))]
+                                   out / "story.jpg", FOOTER, size=(1080, 1920), theme=GAME)]
             types = ["image"]
         else:
             raise ValueError(f"모르는 형식: {kind}")
@@ -165,11 +163,11 @@ class Pipeline:
         for key, head, body in plan:
             if key not in s:
                 continue
-            media.append(compose.slide(s[key], head, body, out / f"{len(media) + 1}.jpg", FOOTER))
+            media.append(compose.slide(s[key], head, body, out / f"{len(media) + 1}.jpg", FOOTER, theme=GAME))
             slides_desc.append(f"{head} — {body}")
         media.append(compose.cta_slide("지금 바로 플레이", ["폰 가로 · 세로 모두 지원", "설치 없이 브라우저에서"],
                                        src["play_url"].removeprefix("https://").rstrip("/"),
-                                       out / f"{len(media) + 1}.jpg"))
+                                       out / f"{len(media) + 1}.jpg", theme=GAME))
         slides_desc.append("마지막: 플레이 링크 안내")
         scene = "랩워즈 전체 소개 (업데이트 총정리: 장비 뽑기 · 외전 7편 · 전공 모드 · 무한 모드 · 꾸미기)"
         text = captions.generate(src, self.cfg.caption, "CAROUSEL", scene, slides_desc,
@@ -196,12 +194,11 @@ class Pipeline:
         if kind == "REELS":
             if not cap.video:
                 raise RuntimeError("녹화 파일이 없음")
-            colors = {"bg": (28, 31, 51), "ink": (242, 240, 230), "sub": (154, 160, 191), "card": (38, 42, 68)}
             ov = compose.reel_overlay(compose.ReelText(
                 label="오픈소스 · 셀프 호스팅", title=src["title"], subtitle=src["tagline"],
                 scene="파일을 읽으면 도서관으로, 테스트를 돌리면 테스트 구역으로",
                 cta=f"{repo_short}  ·  프로필 링크"), out / "overlay.png",
-                video_h=compose.video_height(cap.crop), colors=colors)
+                video_h=compose.video_height(cap.crop), theme=themes.get("project"))
             body = compose.make_reel(cap.video, cap.start + 0.3, seconds, ov, out / "body.mp4", crop=cap.crop)
             cover = compose.video_cover(body, min(seconds / 2, 10), out / "cover.jpg")
             reel = compose.prepend_cover(body, cover, out / "reel.mp4")
@@ -210,7 +207,7 @@ class Pipeline:
         else:
             kind = "CAROUSEL"
             c = {"brand": src["title"], "report_name": "레포 소개", "date_label": "",
-                 "footnote": f"{repo_short}  |  화면은 합성 데모 데이터", "theme": AO_THEME}
+                 "footnote": f"{repo_short}  |  화면은 합성 데모 데이터", "theme": themes.css("project")}
             slides = [
                 ("shot", {**c, "big": src["tagline"], "image": cap.office_shot.as_uri(),
                           "caption": "Claude Code·Codex 세션이 작은 캐릭터가 되어, 하는 일에 따라 사무실을 돌아다닙니다."}),
@@ -269,7 +266,7 @@ class Pipeline:
         (work / "snapshot.json").write_text(json.dumps(snap, ensure_ascii=False, indent=1), encoding="utf-8")
         ana = analysis.analyze(snap, self.cfg.caption)
         (work / "analysis.json").write_text(json.dumps(ana, ensure_ascii=False, indent=1), encoding="utf-8")
-        media = render(market_report.slides(snap, ana), work / "out")
+        media = render(market_report.slides(snap, ana), work / "out", theme=themes.css("market"))
         expires = market_expiry(report, now)
         title = f"[증시] {analysis.REPORT_KO[report]} {today:%m/%d} {ana['headline']}"
         return self._finalize(pid, source, "CAROUSEL", title, ana["caption"], media, ["image"] * len(media),
@@ -280,7 +277,8 @@ class Pipeline:
         from . import custom
 
         pid, work = self._new_id("topic", "carousel")
-        content, media = custom.make_topic(topic, self.cfg.caption, work / "out", design)
+        content, media = custom.make_topic(topic, self.cfg.caption, work / "out", design,
+                                           theme=themes.css(themes.topic_of("topic")))
         kind = "CAROUSEL" if len(media) > 1 else "IMAGE"
         return self._finalize(pid, "topic", kind, f"[주제] {content.get('title', topic)}", content["caption"], media,
                               ["image"] * len(media), meta={"check": "none", "topic": topic, "design": design})
