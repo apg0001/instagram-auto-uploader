@@ -294,6 +294,176 @@ async def side(url: str, out: Path, seconds: float = 16) -> tuple[Path | None, l
     return getattr(page, "video_path", None), segs
 
 
+def _now(page: Page) -> float:
+    return time.monotonic() - page.t0  # type: ignore[attr-defined]
+
+
+async def to_gacha(page: Page, tab: int) -> None:
+    """지도 → 장비 지원·심사 화면의 탭 (0 장비 지원, 1 심사 결과, 2 옷장)."""
+    if not await page.locator(".lab-tabs:visible").count():
+        await click(page, "button.gacha-btn", wait=1200)
+    await page.locator(".lab-tabs:visible button").nth(tab).click()
+    await page.wait_for_timeout(900)
+
+
+async def gacha_back(page: Page) -> None:
+    """장비 지원·심사 화면 → 지도 ('← 뒤로'). 이 화면의 탭도 chapter-tab 이라 to_map 만으로는 구분이 안 된다."""
+    await click(page, ".topbar button.btn.small", "뒤로", wait=1200)
+    await to_map(page)
+
+
+async def confirm(page: Page) -> None:
+    ok = page.locator(".overlay:visible .btn.primary").filter(has_text="확인")
+    if await ok.count():
+        await ok.first.click()
+        await page.wait_for_timeout(800)
+
+
+async def gear(url: str, out: Path) -> tuple[Path | None, list[dict]]:
+    """장비 뽑기 편: 10회 뽑기 공개 → 천장 100회 레전더리 직접 고르기 → 뽑은 장비로 전투.
+    구간: [{key, start, dur, shot}] (start = 녹화 기준 초)."""
+    out.mkdir(parents=True, exist_ok=True)
+    segs: list[dict] = []
+    async with session(url, record_dir=out / "raw") as page:
+        await to_map(page)
+        await to_gacha(page, 0)
+        await gacha_mix(page)
+        t = _now(page)
+        await page.screenshot(path=out / "gear_screen.png")
+        await page.wait_for_timeout(1200)
+        await click(page, ".gear-draw button.submit-10", wait=3600)   # 카드 10장이 차례로 열린다 (~2.6초)
+        await page.screenshot(path=out / "gear_10.png")
+        segs.append({"key": "draw10", "start": t, "dur": _now(page) - t, "shot": out / "gear_10.png"})
+        await confirm(page)
+        spark = page.locator("button.spark-btn:visible")
+        if await spark.count():                                       # 천장 95 + 10회 → 레전더리 고르기
+            t = _now(page)
+            await spark.first.click()
+            await page.wait_for_timeout(1500)
+            await page.screenshot(path=out / "spark.png")
+            await page.locator("button.spark-pick:visible").nth(2).click()   # 입자 가속기
+            await page.wait_for_timeout(3000)                         # 상자 → 레전더리! 섬광
+            await page.screenshot(path=out / "legend.png")
+            segs.append({"key": "spark", "start": t, "dur": _now(page) - t, "shot": out / "legend.png"})
+            await confirm(page)
+        await gacha_back(page)
+        await chapter_tab(page, "포닥")
+        await open_node(page, "7-8")
+        await click(page, "button.btn.primary", "출전", wait=2500)
+        await skip_cutscenes(page)
+        shot = out / "gear_battle.png"
+        start = await battle(page, 18, [shot], seed=23, keys="6789", skill_rate=0.25)  # 장비(6~9번) 위주로 소환
+        segs.append({"key": "battle", "start": start, "dur": 18, "shot": shot})
+        await leave_battle(page)
+    return getattr(page, "video_path", None), segs
+
+
+# 전공 모드: (과목 이름 = course-card title, 화면에 보이는 규칙). 화면 효과가 눈에 띄는 과목만.
+MAJOR_COURSES = [
+    ("신호와시스템", "샘플링: 적이 일정한 간격으로만 또렷하게 보인다"),
+    ("데이터프로그래밍", "결측치: 적 체력이 전부 NaN"),
+    ("자료구조와실습", "스택 오버플로: 새 잡무가 줄 맨 앞에 끼어든다 (LIFO)"),
+    ("공학선형대수학", "전치: 18초마다 적 줄의 앞뒤가 뒤집힌다"),
+]
+
+
+async def back_to_major(page: Page) -> None:
+    for _ in range(8):
+        if await page.locator("button.course-card:visible").count():
+            return
+        for text in ("지도로", "후퇴하기", "후퇴", "확인", "연구실로"):
+            b = page.locator("button:visible").filter(has_text=text)
+            if await b.count():
+                await b.first.click()
+                await page.wait_for_timeout(1200)
+                break
+        else:
+            await page.keyboard.press("Escape")
+            await page.wait_for_timeout(700)
+    raise RuntimeError("전공 지도로 돌아오지 못함")
+
+
+async def major(url: str, out: Path) -> dict[str, Path]:
+    """전공 모드 편 캐러셀: 이수체계도, 과목 정보(규칙), 과목별 전투 화면."""
+    out.mkdir(parents=True, exist_ok=True)
+    s: dict[str, Path] = {}
+    async with session(url) as page:
+        await to_map(page)
+        await click(page, ".mode-switch button.mode-btn", "전공", wait=1500)
+        s["map"] = out / "major_map.png"
+        await page.screenshot(path=s["map"])
+        for i, (name, _rule) in enumerate(MAJOR_COURSES):
+            await page.locator(f'button.course-card[title="{name}"]:visible').first.click()
+            await page.wait_for_timeout(1000)
+            if i == 0:
+                s["info"] = out / "major_info.png"
+                box = await page.locator(".course-info:visible").first.bounding_box()
+                clip = ({"x": box["x"] - 12, "y": box["y"] - 12, "width": box["width"] + 24, "height": box["height"] + 24}
+                        if box else None)
+                await page.screenshot(path=s["info"], clip=clip)
+            await page.locator(".course-info:visible button.btn.primary").first.click()
+            await page.wait_for_timeout(2500)
+            await skip_cutscenes(page)
+            shot = out / f"major_{i}.png"
+            # 전치(18초)·샘플링은 시간이 지나야 보인다 → 전투 22초, 사진은 그 사이 한 장
+            await battle(page, 22, [shot], seed=31 + i)
+            if shot.exists():
+                s[f"course{i}"] = shot
+            await back_to_major(page)
+    return {k: v for k, v in s.items() if v.exists()}
+
+
+async def endless_closet(url: str, out: Path) -> tuple[Path | None, list[dict]]:
+    """무한 모드·꾸미기 편: 무한 38판 전투 → 논문 투고 10편 심사 결과 → 옷장."""
+    out.mkdir(parents=True, exist_ok=True)
+    segs: list[dict] = []
+    async with session(url, record_dir=out / "raw") as page:
+        await to_map(page)
+        await page.locator("button.chapter-tab.endless-tab:visible").first.click()
+        await page.wait_for_timeout(1000)
+        t = _now(page)
+        await page.screenshot(path=out / "endless_map.png")
+        await page.wait_for_timeout(1500)
+        segs.append({"key": "endless_map", "start": t, "dur": 2.5, "shot": out / "endless_map.png"})
+        await click(page, ".endless-box button.btn.primary", wait=1000)
+        await click(page, "button.btn.primary", "출전", wait=2500)
+        await skip_cutscenes(page)
+        shot = out / "endless_battle.png"
+        start = await battle(page, 16, [shot], seed=41, skill_rate=0.2)
+        segs.append({"key": "endless", "start": start, "dur": 16, "shot": shot})
+        await leave_battle(page)
+        await to_gacha(page, 1)
+        await page.evaluate("""(() => { let i = 0; const r = Math.random;
+          Math.random = () => { i++; return (i % 7 === 1) ? 0.01 : r(); }; })()""")   # 가끔 억셉트
+        t = _now(page)
+        await click(page, ".gacha-draw button.submit-10", wait=3800)
+        await page.screenshot(path=out / "review_10.png")
+        segs.append({"key": "review", "start": t, "dur": _now(page) - t, "shot": out / "review_10.png"})
+        await confirm(page)
+        await to_gacha(page, 2)
+        t = _now(page)
+        for chip in range(3):                                          # 모자를 몇 개 바꿔 써 본다
+            hats = page.locator(".closet .wear-grid:not(.colors) button.wear-chip:not(.locked):visible")
+            if await hats.count() > chip:
+                await hats.nth(chip).click()
+                await page.wait_for_timeout(1100)
+        await page.screenshot(path=out / "closet.png")
+        segs.append({"key": "closet", "start": t, "dur": _now(page) - t, "shot": out / "closet.png"})
+    return getattr(page, "video_path", None), segs
+
+
+def run_gear(url: str, out: Path) -> tuple[Path | None, list[dict]]:
+    return asyncio.run(gear(url, out))
+
+
+def run_major(url: str, out: Path) -> dict[str, Path]:
+    return asyncio.run(major(url, out))
+
+
+def run_endless(url: str, out: Path) -> tuple[Path | None, list[dict]]:
+    return asyncio.run(endless_closet(url, out))
+
+
 def run_side(url: str, out: Path) -> tuple[Path | None, list[dict]]:
     return asyncio.run(side(url, out))
 

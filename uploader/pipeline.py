@@ -178,8 +178,12 @@ class Pipeline:
         src = self.cfg.source("lab-wars")
         if feature == "side":
             return self.tour_side(src, scheduled_at)
+        if feature in ("gear", "endless"):
+            return self.tour_clips(src, feature, scheduled_at)
+        if feature == "major":
+            return self.tour_major(src, scheduled_at)
         if feature != "overview":
-            raise ValueError(f"모르는 랩워즈 소개: {feature} (overview | side)")
+            raise ValueError(f"모르는 랩워즈 소개: {feature} (overview | side | gear | major | endless)")
         pid, work = self._new_id("lab-wars", "carousel")
         out = work / "out"
         log.info("생성 시작 %s (소개: %s)", pid, feature)
@@ -245,6 +249,97 @@ class Pipeline:
                               {"tour": "side", "check": "link"}, scheduled_at=scheduled_at)
         shutil.rmtree(work / "capture" / "raw", ignore_errors=True)
         return post
+
+    # 소개 시리즈 릴스: (녹화 구간 key, 시작에서 건너뛸 초, 최대 길이, 화면 문구)
+    TOUR_CLIPS = {
+        "gear": {
+            "label": "장비 지원 뽑기", "title": "랩워즈 장비 뽑기", "subtitle": "입자 가속기 · 토카막 · 양자컴퓨터, ICT 장비 28종",
+            "cover": "spark", "run": lab_wars_tour.run_gear,
+            "clips": [("draw10", 0.6, 4.4, "10회 뽑기\n카드가 한 장씩 열린다"),
+                      ("spark", 0.0, 5.0, "천장 100회\n레전더리를 직접 고른다"),
+                      ("battle", 5.0, 9.0, "뽑은 장비로 출전\n입자 가속기 · 토카막 · 테슬라 코일")],
+            "scene": "랩워즈 장비 뽑기 소개 (10회 뽑기 공개, 천장 100회 레전더리 직접 선택, 장비로 전투)",
+        },
+        "endless": {
+            "label": "무한 모드 · 꾸미기", "title": "랩워즈 무한 모드", "subtitle": "끝나지 않는 잡무, 그리고 옷장",
+            "cover": "endless", "run": lab_wars_tour.run_endless,
+            "clips": [("endless_map", 0.0, 2.4, "무한 모드\n교수가 되어도 일은 끝나지 않는다"),
+                      ("endless", 5.0, 8.0, "판마다 강해지는 적\n5판마다 보스 러시"),
+                      ("review", 0.3, 3.0, "논문 투고 → 심사 결과\n억셉트면 레어 아이템"),
+                      ("closet", 0.0, 3.6, "옷장\n모자 · 옷 색 · 칭호로 꾸미기")],
+            "scene": "랩워즈 무한 모드와 꾸미기 소개 (무한 38판 전투, 논문 투고 심사 결과로 아이템, 옷장)",
+        },
+    }
+
+    def tour_clips(self, src: dict, feature: str, scheduled_at: float | None) -> Post:
+        """소개 시리즈 릴스: 녹화 구간을 이어 붙이고 구간마다 문구를 바꾼 뒤 BGM을 깐다."""
+        from . import bgm
+
+        spec = self.TOUR_CLIPS[feature]
+        pid, work = self._new_id("lab-wars", "reels")
+        out = work / "out"
+        log.info("생성 시작 %s (소개: %s)", pid, feature)
+        video, segs = spec["run"](src["play_url"], work / "capture")
+        if not video:
+            raise RuntimeError("녹화 파일이 없음")
+        by_key = {sg["key"]: sg for sg in segs}
+        parts: list[Path] = []
+        desc: list[str] = []
+        cover_at, total = None, 0.0
+        for i, (key, skip, length, text) in enumerate(spec["clips"]):
+            sg = by_key.get(key)
+            if not sg:
+                log.warning("구간 없음: %s", key)
+                continue
+            dur = max(1.5, min(length, sg["dur"] - skip))
+            ov = compose.reel_overlay(compose.ReelText(
+                label=spec["label"], title=spec["title"], subtitle=spec["subtitle"], scene=text,
+                cta="설치 없이 브라우저에서 바로 · 프로필 링크"), out / f"overlay{i}.png", theme=GAME)
+            parts.append(compose.make_reel(video, sg["start"] + skip, dur, ov, work / f"part{i}.mp4"))
+            if key == spec["cover"]:
+                cover_at = total + dur * 0.7
+            total += dur
+            desc.append(f"{text.replace(chr(10), ' — ')} ({dur:.0f}초)")
+        if not parts:
+            raise RuntimeError("이어 붙일 구간이 없음")
+        body = compose.concat(parts, work / "body_silent.mp4")
+        music = bgm.write(total, int(datetime.now(self.tz).strftime("%Y%m%d")) + len(feature), work / "bgm.wav")
+        body = compose.replace_audio(body, music, out / "body.mp4", volume=0.8)
+        cover = compose.video_cover(body, cover_at if cover_at is not None else total / 2, out / "cover.jpg")
+        reel = compose.prepend_cover(body, cover, out / "reel.mp4")
+        text = captions.generate(src, self.cfg.caption, "REELS", spec["scene"], desc, self.db.recent_captions("lab-wars"))
+        post = self._finalize(pid, "lab-wars", "REELS", f"[소개] {spec['title']}", text, [reel], ["video"], cover,
+                              {"tour": feature, "check": "link"}, scheduled_at=scheduled_at)
+        shutil.rmtree(work / "capture" / "raw", ignore_errors=True)
+        return post
+
+    def tour_major(self, src: dict, scheduled_at: float | None) -> Post:
+        """소개 시리즈: 전공 모드 캐러셀 (이수체계도 → 과목 규칙 → 과목별 전투 → 플레이 링크)."""
+        pid, work = self._new_id("lab-wars", "carousel")
+        out = work / "out"
+        log.info("생성 시작 %s (소개: 전공 모드)", pid)
+        s = lab_wars_tour.run_major(src["play_url"], work / "capture")
+        plan = [("map", "전공 모드", "정보통신공학 4년, 41과목 이수체계도. 학점 4.5 만점에 도전"),
+                ("info", "과목마다 교수님과 규칙", "수강 신청 전에 이번 과목의 특수 규칙을 확인")]
+        plan += [(f"course{i}", name, rule) for i, (name, rule) in enumerate(lab_wars_tour.MAJOR_COURSES)]
+        media: list[Path] = []
+        desc: list[str] = []
+        for key, head, body in plan:
+            if key not in s:
+                continue
+            media.append(compose.slide(s[key], head, body, out / f"{len(media) + 1}.jpg", FOOTER, theme=GAME))
+            desc.append(f"{head} — {body}")
+        if len(media) < 3:
+            raise RuntimeError(f"전공 모드 화면이 모자람: {list(s)}")
+        media.append(compose.cta_slide("지금 바로 플레이", ["폰 가로 · 세로 모두 지원", "설치 없이 브라우저에서"],
+                                       src["play_url"].removeprefix("https://").rstrip("/"),
+                                       out / f"{len(media) + 1}.jpg", theme=GAME))
+        desc.append("마지막: 플레이 링크 안내")
+        scene = "랩워즈 전공 모드 소개 (정보통신공학 41과목, 과목마다 전공 지식이 전투 규칙: 샘플링·NaN·스택·전치)"
+        text = captions.generate(src, self.cfg.caption, "CAROUSEL", scene, desc, self.db.recent_captions("lab-wars"))
+        return self._finalize(pid, "lab-wars", "CAROUSEL", "[소개] 랩워즈 전공 모드", text, media,
+                              ["image"] * len(media), None, {"tour": "major", "check": "link"},
+                              scheduled_at=scheduled_at)
 
     def generate_repo(self, source: str, kind: str | None, scheduled_at: float | None = None) -> Post:
         """레포 소개: 데모 영상 릴스 또는 카드뉴스 캐러셀."""
@@ -350,7 +445,8 @@ class Pipeline:
 
         theme = topic_theme or themes.topic_of(source)
         pid, work = self._new_id(source, "carousel")
-        content, media = custom.make_topic(topic, self.cfg.caption, work / "out", design, theme=themes.css(theme))
+        content, media = custom.make_topic(topic, self.cfg.caption, work / "out", design, theme=themes.css(theme),
+                                           kicker=title)
         kind = "CAROUSEL" if len(media) > 1 else "IMAGE"
         head = f"[{title}]" if title else "[주제]"
         return self._finalize(pid, source, kind, f"{head} {content.get('title', topic[:40])}", content["caption"], media,
