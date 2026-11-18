@@ -76,7 +76,29 @@ class Pipeline:
             return self.generate_tour(source.split(":", 1)[1], parse_when(at, self.tz))
         if source == "lab-wars":
             return self.generate_game(source, kind, stage)
-        raise ValueError(f"모르는 소스: {source} (lab-wars | agent-office | market:premarket|close|weekly|monthly)")
+        if source == "github-trending":
+            return self.generate_github(parse_when(at, self.tz))
+        raise ValueError(f"모르는 소스: {source} (lab-wars | agent-office | github-trending | market:premarket|close|weekly|monthly)")
+
+    def generate_github(self, scheduled_at: float | None = None) -> Post:
+        """주간 깃허브 인기 레포 Top 5 릴스 (TTS 내레이션 + 합성 BGM)."""
+        from . import github_reel
+        from .sources import github_trending as gt
+
+        src = self.cfg.raw.get("github_trending") or {}
+        day = datetime.now(self.tz).date()
+        pid, work = self._new_id("tech-github", "reels")
+        log.info("생성 시작 %s", pid)
+        repos = gt.fetch()
+        snaps = self.cfg.data_dir / "github-trending"
+        prev = gt.previous(snaps, day)
+        gt.save(repos, snaps, day)
+        readmes = {r.name: gt.readme(r.name) for r in repos[:9]}
+        reel, cover, text, desc = github_reel.build(
+            repos, prev, readmes, day, work / "out", self.cfg.caption,
+            voice_name=src.get("voice", "ko-KR-SunHiNeural"), rate=src.get("rate", "+15%"))
+        return self._finalize(pid, "tech-github", "REELS", f"[깃허브 Top 5] {day:%m/%d}", text, [reel], ["video"],
+                              cover, {"check": "none", "slides": desc, "topic_theme": "tech"}, scheduled_at)
 
     def generate_game(self, source: str, kind: str | None, stage: str | None) -> Post:
         src = self.cfg.source(source)

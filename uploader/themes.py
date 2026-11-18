@@ -33,7 +33,7 @@ THEMES: dict[str, dict[str, Any]] = {
 
 # 소스 이름(앞부분) → 주제. config의 소스에 topic: 을 적으면 그쪽이 우선.
 SOURCE_TOPIC = {"lab-wars": "game", "agent-office": "project", "market": "market", "topic": "tech",
-                "tech": "tech", "career": "career"}
+                "tech": "tech", "github-trending": "tech", "career": "career"}
 
 
 def ko(topic: str) -> str:

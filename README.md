@@ -2,8 +2,8 @@
 
 <p align="center">
   <b>라즈베리파이 한 대로 돌리는 개인용 인스타그램 자동 업로더</b><br>
-  게임 플레이 녹화, 증시 시황 카드, 레포 소개 카드뉴스를 알아서 만들고<br>
-  <b>노션에서 사람이 승인한 것만</b> 올립니다.
+  게임 플레이 녹화, 증시 시황 카드, 깃허브 인기 레포 릴스(음성·BGM 포함)를 알아서 만들고<br>
+  <b>노션에서 사람이 승인한 것만</b> 올립니다. 무엇을 언제 만들지도 노션에 적으면 됩니다.
 </p>
 
 <p align="center">
@@ -24,6 +24,7 @@
 <p align="center">
   <a href="#-무엇을-올리나">무엇을 올리나</a> ·
   <a href="#️-어떻게-돌아가나">어떻게 돌아가나</a> ·
+  <a href="#-노션-대시보드">노션 대시보드</a> ·
   <a href="#-설치">설치</a> ·
   <a href="#️-명령">명령</a> ·
   <a href="#-스케줄">스케줄</a> ·
@@ -36,9 +37,11 @@
 
 | 소스 | 형식 | 내용 | 원칙 |
 |---|---|---|---|
-| 🎮 **랩워즈** (`lab-wars`) | 릴스 · 캐러셀 | 헤드리스 브라우저가 [랩워즈](https://apg0001.github.io/lab-wars/)를 직접 플레이하며 녹화. 보스전·스토리 컷신·스테이지 지도 | 게임과 플레이 링크만. **레포·소스코드 언급 금지** |
+| 🎮 **랩워즈** (`lab-wars`, `lab-wars:<기능>`) | 릴스 · 캐러셀 | 헤드리스 브라우저가 [랩워즈](https://apg0001.github.io/lab-wars/)를 직접 플레이하며 녹화. 전체 소개 → 외전 · 장비 뽑기 · 전공 모드 · 무한 모드 순서의 소개 시리즈 | 게임과 플레이 링크만. **레포·소스코드 언급 금지** |
 | 🏢 **Agent Office** (`agent-office`) | 릴스 · 카드뉴스 | 로그인 없이 보이는 **합성 데모 화면**을 녹화. 구역·상태·개인정보 원칙·설치 3단계 | 레포 링크를 꼭 넣고, 베타라는 점을 솔직하게 |
 | 📈 **증시** (`market:*`) | 캐러셀 | 장 시작 전 · 장 마감 · 주간 · 월간 리포트. 업종 등락, 시총 상위, 급등·급락, 요주의 종목 | 숫자는 데이터에서만. 근거는 **출처가 있을 때만**. 면책 문구 필수 |
+| ⭐ **깃허브 인기 레포** (`github-trending`) | 릴스 | GitHub Trending(주간)에서 이번 주 별 증가 Top 5. 5위→1위 카운트다운 + 한국어 TTS 내레이션 + 매번 다른 합성 BGM. 매주 스냅샷으로 지난주 순위·증가량 비교 | 숫자는 데이터 그대로. 크랙·악성·코인 홍보 레포 제외 |
+| 🗓 **노션 기획** (`plan`) | 카드뉴스 · 릴스 | 노션 '콘텐츠 기획' 표에 주제·주기를 대충 적으면 Claude가 다듬어 정기 시리즈로 | 다듬은 규칙을 사람이 읽고 '사용'으로 바꿔야 시작 |
 | ✍️ **요청형** (`topic`, `post`) | 카드뉴스 · 무엇이든 | 주제를 주면 조사해서 카드뉴스로. 또는 준비한 파일 그대로 | 사람이 승인 |
 
 ### 📈 증시 리포트
@@ -59,9 +62,10 @@
 ```mermaid
 flowchart LR
   cron([cron]) --> gen[generate]
+  plan[(노션<br/>콘텐츠 기획)] -- plan · 5분마다 --> gen
   gen --> cap[녹화·캡처<br/>Playwright]
-  gen --> data[시장 데이터<br/>네이버·Yahoo]
-  cap --> media[합성<br/>ffmpeg·Pillow·HTML 카드]
+  gen --> data[데이터<br/>네이버·Yahoo·GitHub]
+  cap --> media[합성<br/>ffmpeg·Pillow·HTML 카드<br/>TTS·BGM]
   data --> ai[claude -p<br/>웹 검색·캡션]
   media --> ai
   ai --> host[ig-media 레포<br/>GitHub Pages URL]
@@ -75,9 +79,7 @@ flowchart LR
 2. **글쓰기** — `claude -p`(Claude Code 헤드리스)가 캡션을 씁니다. 별도 API 키 없이 구독 사용량을 씁니다.
 3. **올려 두기** — 인스타그램은 공개 URL에서 파일을 가져가므로, 미디어를 [`apg0001/ig-media`](https://github.com/apg0001/ig-media)(GitHub Pages)에 올립니다.
 4. **승인** — 노션 DB에 '초안'으로 등록됩니다. 미리보기를 보고, 캡션을 고치고, 상태를 **승인** 또는 **반려**로 바꿉니다. 예약 날짜도 넣을 수 있습니다.
-5. **게시** — `sync`가 승인 건을 Instagram API로 올리고 '게시됨'과 인스타 링크를 채웁니다.
-
-> 증시 게시물은 `config.yaml`의 `auto_approve: [market]` 로 **자동 승인**됩니다 (노션에 '승인'으로 올라가고 다음 sync에서 게시). 게시 직전 캡션 검증은 그대로 거칩니다.
+5. **게시** — `sync`가 승인 건을 Instagram API(또는 [Make 웹훅](docs/make.md))로 올리고 '게시됨'과 인스타 링크를 채웁니다.
 6. **정리** — 게시·반려 후 7일이 지난 미디어는 ig-media에서 **히스토리째** 지웁니다. 인스타그램은 게시할 때 파일을 복사해 가므로 원본이 필요 없습니다.
 
 ### 🎨 카드 디자인
@@ -87,6 +89,54 @@ flowchart LR
 - 증시 카드는 국내 시세 관습(상승 빨강 ▲, 하락 파랑 ▼)과 고정폭 숫자를 쓰고, 과감함은 표지 한 곳(그날 시장 방향으로 물든 배경)에만 씁니다.
 - `topic --design free`는 이 스킬을 그대로 지침으로 넣어 Claude가 슬라이드 HTML을 직접 디자인합니다.
 - 서체는 [Pretendard](https://github.com/orioncactus/pretendard)(OFL) 한 가족입니다.
+- **주제마다 색이 고정**돼 피드에서 색만 봐도 구분됩니다 ([`uploader/themes.py`](uploader/themes.py)). 모든 카드·릴스 맨 위에 주제 색 띠가 있습니다.
+
+| 주제 | 색 | 소스 |
+|---|---|---|
+| 게임 | 크림 · 주황 | 랩워즈 |
+| 프로젝트 | 남색 · 노랑 | Agent Office 등 직접 만든 도구 |
+| 증시 | 회색 · 먹색 (상승 빨강 / 하락 파랑) | 증시 리포트 |
+| 테크·AI | 연보라 · 보라 | 깃허브 인기 레포, 요청형 주제 |
+| 커리어 | 민트 · 초록 | 노션 기획에서 고른 커리어 주제 |
+
+### 🔊 릴스 소리
+
+- **내레이션** — [edge-tts](https://github.com/rany2/edge-tts)(무료, API 키 없음)의 한국어 음성. 비공식 엔드포인트라 막히면 음성 없이 자막·BGM만으로 만듭니다. 음성은 `config.yaml`의 `github_trending.voice`.
+- **BGM** — [`uploader/bgm.py`](uploader/bgm.py)가 numpy로 직접 합성합니다. 날짜를 시드로 조성·템포·코드 진행·드럼 패턴·음색이 매번 바뀌고, 저작권 걱정이 없습니다. 목소리가 나올 때는 사이드체인으로 자동으로 작아집니다.
+- 랩워즈 릴스는 게임이 실시간으로 합성하는 효과음·배경음을 그대로 씁니다.
+
+### ✍️ 캡션 원칙
+
+첫 줄은 검색될 만한 키워드를 담은 훅, 해시태그는 **4~5개**(고유 1 + 주제 2~3 + 대상 1)만. 8개를 넘으면 다시 씁니다.
+
+## 📋 노션 대시보드
+
+노션 페이지 하나에 **게시물 표**와 **콘텐츠 기획 표**가 있습니다. `notion-dashboard` 한 번이면 보기와 기획 표가 만들어집니다(여러 번 실행해도 안전).
+
+**게시물 표의 보기(탭)** — 상태만 바꾸면 알아서 다른 탭으로 옮겨 갑니다.
+
+| 탭 | 무엇 |
+|---|---|
+| 📥 확인할 것 | 초안 · 승인 · 실패 — 매일 여기만 보면 됨 |
+| 📅 예약 달력 | '예약' 날짜 기준 달력 |
+| 🖼 게시됨 | 올라간 것 썸네일 갤러리 |
+| 🗂 주제별 | 게임 · 프로젝트 · 증시 · 테크·AI · 커리어 보드 |
+| 🗑 반려 | 반려된 것 |
+| 📋 전체 | 최신순 전체 |
+
+**콘텐츠 기획 표** — 코드 수정 없이 새 시리즈를 만듭니다.
+
+```text
+새 요청  : '메모'에 대충 적기   예) 깃허브 인기 레포 top5 매주 일요일 아침, 지난주 대비
+   ↓  (plan, 5분 안)
+검토 대기 : Claude가 이름·주제·주기·요일·시각·'다듬은 규칙'·'확인할 점'을 채움 (계정 규칙 반영)
+   ↓  (사람이 읽고 상태 변경)
+사용      : '다음 생성' 시각마다 초안 1개 → 게시물 표 (게시는 여전히 승인 후)
+일시중지 · 완료(한 번짜리) · 오류
+```
+
+- '생성기'로 만드는 방법을 고릅니다: **웹 조사 카드뉴스**(기본, `claude -p` 웹 검색) / **깃허브 트렌딩 릴스**.
+- 메모를 고쳐 다시 다듬으려면 상태를 '새 요청'으로 되돌리면 됩니다.
 
 ## 🚀 설치
 
@@ -110,6 +160,7 @@ cp .env.example .env    # 토큰 채우기
 
    ```bash
    .venv/bin/python -m uploader notion-setup "<그 페이지 URL>"
+   .venv/bin/python -m uploader notion-dashboard     # 보기 + 콘텐츠 기획 표
    ```
 
 | 속성 | 쓰임 |
@@ -117,6 +168,7 @@ cp .env.example .env    # 토큰 채우기
 | 상태 | `초안` → `승인` / `반려` → `게시됨` / `실패` |
 | 캡션 | 여기서 고치면 고친 대로 게시 |
 | 미디어 · 본문 | 미리보기 |
+| 주제 | 카드 색과 같은 분류 (자동) |
 | 예약 | 비워 두면 승인 즉시, 날짜를 넣으면 그때 |
 | 인스타 링크 · 오류 | 게시 결과 |
 
@@ -140,12 +192,17 @@ cp .env.example .env    # 토큰 채우기
 ```bash
 python -m uploader generate --source lab-wars [--kind REELS|CAROUSEL] [--stage 3-10]
 python -m uploader generate --source agent-office [--kind REELS|CAROUSEL]
+python -m uploader generate --source lab-wars:overview --at 2026-11-19T19:00   # 소개 시리즈 + 예약
 python -m uploader generate --source market:close      # premarket | close | weekly | monthly
+python -m uploader generate --source github-trending   # 깃허브 인기 레포 Top 5 릴스
 
 python -m uploader topic "이번 주 AI 반도체 이슈 정리" [--design free]
 python -m uploader post a.jpg b.jpg --title "제목" --caption-file caption.txt
 
 python -m uploader sync          # 노션 결정 반영 → 기한 지난 건 반려 → 승인 건 게시
+python -m uploader plan          # 노션 콘텐츠 기획: 새 요청 다듬기 + 때가 된 시리즈 초안 1개
+python -m uploader notion-setup <페이지>   # 게시물 표 만들기 (처음 한 번)
+python -m uploader notion-dashboard       # 보기·주제·콘텐츠 기획 표
 python -m uploader list
 python -m uploader approve <id>  # 노션 없이 (reject도 있음)
 python -m uploader cleanup
@@ -164,18 +221,27 @@ python -m uploader refresh-token
 | 평일 16:00 | 장 마감 시황 |
 | 평일 16:40 | 월간 리포트 (월말 마지막 거래일에만) |
 | 토 09:00 | 주간 리포트 |
-| 화·금 12:00 | 랩워즈 |
-| 수 12:00 | Agent Office |
+| 5분마다 | `plan` — 노션 콘텐츠 기획 (깃허브 Top 5는 여기서 매주 일 10:00) |
 | 1분마다 | `sync` |
 | 매일 04:30 | `cleanup` |
 | 월 05:00 | `refresh-token` |
+
+랩워즈 소개 시리즈는 `--at`으로 하루 한 편씩 예약해 두고, 정기 랩워즈·Agent Office 생성은 지금 꺼 두었습니다.
+무거운 생성 작업은 `nice -n 19`로 돌리고, 한 번에 하나만 돕니다(파이 전원 한계).
 
 ## 🧱 구조
 
 ```text
 uploader/
   sources/lab_wars.py      🎮 랩워즈 녹화 (쇼케이스 저장 주입, 봇 플레이, 미니맵으로 카메라 추적)
+  sources/lab_wars_tour.py 🎮 랩워즈 소개 시리즈 캡처 (전체 소개 등)
   sources/agent_office.py  🏢 Agent Office 합성 데모 녹화 (로그인 상태면 중단)
+  sources/github_trending.py ⭐ GitHub Trending 주간 수집·스냅샷·지난주 비교
+  github_reel.py           ⭐ 깃허브 Top 5 릴스 장면·내레이션·믹스
+  tts.py                   🗣 edge-tts 한국어 내레이션
+  bgm.py                   🎵 시드별 BGM 합성
+  themes.py                🎨 주제별 카드 색
+  planner.py               🗓 노션 대시보드 보기 + 콘텐츠 기획 (다듬기·주기 실행)
   market/data.py           📈 시세 수집 (네이버 증권·Yahoo Finance·KRX 휴장일)
   market/analysis.py       🔎 claude -p 웹 검색 분석 + 숫자·이름·면책 검증
   market/report.py         🧾 리포트별 슬라이드 구성
@@ -195,7 +261,9 @@ config.yaml                ⚙️ 설정 (비밀 값은 .env)
 
 ## 🛡 안전장치
 
-- **승인 없이는 아무것도 올라가지 않습니다.** 노션에서 사람이 승인해야 게시됩니다.
+- **승인 없이는 아무것도 올라가지 않습니다.** 노션에서 사람이 승인해야 게시됩니다. 예외는 `config.yaml`의 `auto_approve`(지금은 증시만) — 노션에 '승인'으로 올라가 다음 sync에서 게시되며, 반려로 바꾸면 취소됩니다.
+- 노션 기획으로 만든 시리즈도 초안까지만 자동이고, 게시는 승인 후입니다.
+- Make 웹훅이 시간 초과되거나 결과를 못 받으면 '실패'로 남기고 자동 재시도하지 않습니다(중복 게시 방지).
 - 게시 직전에 캡션을 다시 검사합니다(노션에서 고친 것 포함): 필수 링크, 금지 표현, 면책 문구.
 - 증시 글은 매수·매도 권유 표현을 막고, 데이터에 없는 숫자·종목명을 거부합니다.
 - Agent Office 녹화는 로그인하지 않은 브라우저로만 하고, 데모(합성 데이터) 화면이 아니면 멈춥니다.
@@ -221,3 +289,5 @@ Issue → `develop`에서 `feat/#번호-설명` 브랜치 → PR → `CI Gate` �
 | [anthropics/skills](https://github.com/anthropics/skills) — frontend-design, canvas-design | Apache-2.0 (`prompts/anthropic-skills/*/LICENSE.txt`) |
 | [Pretendard](https://github.com/orioncactus/pretendard) | SIL OFL 1.1 (`assets/fonts/LICENSE-Pretendard.txt`) |
 | 시세 데이터 | 네이버 증권, Yahoo Finance — 정보 제공 목적, 투자 권유 아님 |
+| [edge-tts](https://github.com/rany2/edge-tts) | LGPL-3.0 (pip 의존성). 음성은 Microsoft Edge 읽어주기 서비스 |
+| 깃허브 레포 정보 | GitHub Trending 페이지·공개 API — 레포 이름·설명·별 수만 사용 |
