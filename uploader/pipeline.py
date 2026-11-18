@@ -81,7 +81,7 @@ class Pipeline:
         raise ValueError(f"모르는 소스: {source} (lab-wars | agent-office | github-trending | market:premarket|close|weekly|monthly)")
 
     def generate_github(self, scheduled_at: float | None = None) -> Post:
-        """주간 깃허브 인기 레포 Top 5 릴스 (TTS 내레이션 + 합성 BGM)."""
+        """주간 깃허브 인기 레포 Top 5: 릴스(릴스 탭, TTS + 합성 BGM) + 캐러셀(피드) 두 개를 만든다. 릴스 초안을 돌려준다."""
         from . import github_reel
         from .sources import github_trending as gt
 
@@ -93,12 +93,19 @@ class Pipeline:
         snaps = self.cfg.data_dir / "github-trending"
         prev = gt.previous(snaps, day)
         gt.save(repos, snaps, day)
-        readmes = {r.name: gt.readme(r.name) for r in repos[:9]}
-        reel, cover, text, desc = github_reel.build(
-            repos, prev, readmes, day, work / "out", self.cfg.caption,
-            voice_name=src.get("voice", "ko-KR-SunHiNeural"), rate=src.get("rate", "+15%"))
-        return self._finalize(pid, "tech-github", "REELS", f"[깃허브 Top 5] {day:%m/%d}", text, [reel], ["video"],
-                              cover, {"check": "none", "slides": desc, "topic_theme": "tech"}, scheduled_at)
+        cands = repos[:9]
+        readmes = {r.name: gt.readme(r.name) for r in cands}
+        metas = {r.name: gt.details(r.name) for r in cands}
+        res = github_reel.build(repos, prev, readmes, metas, day, work / "out", self.cfg.caption,
+                                voice_name=src.get("voice", "ko-KR-SunHiNeural"), rate=src.get("rate", "+15%"))
+        meta = {"check": "none", "slides": res.desc, "topic_theme": "tech"}
+        reel = self._finalize(pid, "tech-github", "REELS", f"[깃허브 Top 5 · 릴스] {day:%m/%d}", res.reel_caption,
+                              [res.reel], ["video"], res.cover, meta, scheduled_at)
+        cid = pid.replace("-reels", "-carousel")
+        (self.cfg.data_dir / "posts" / cid).mkdir(parents=True, exist_ok=True)
+        self._finalize(cid, "tech-github", "CAROUSEL", f"[깃허브 Top 5 · 캐러셀] {day:%m/%d}", res.carousel_caption,
+                       res.carousel, ["image"] * len(res.carousel), None, meta, scheduled_at)
+        return reel
 
     def generate_game(self, source: str, kind: str | None, stage: str | None) -> Post:
         src = self.cfg.source(source)
