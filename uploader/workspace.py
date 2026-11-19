@@ -25,10 +25,12 @@ if TYPE_CHECKING:
 log = logging.getLogger("uploader")
 
 ARCHIVE_DAYS = 14
-PAGES = [("posts", "📥", "게시물"), ("plan", "🧭", "시리즈 기획"), ("ideas", "💡", "아이디어 수신함"),
-         ("timetable", "🕒", "주간 타임테이블"), ("guide", "📖", "운영 설명서")]
-DB_OF = {"posts": "notion_db_id", "plan": "notion_plan_db_id", "ideas": "notion_ideas_db_id",
-         "timetable": "notion_timetable_db_id"}
+PAGES = [("posts", "📥", "게시물"), ("plan", "🧭", "시리즈 기획"), ("whatif", "🎬", "만약에 주제"),
+         ("ideas", "💡", "아이디어 수신함"), ("timetable", "🕒", "주간 타임테이블"), ("guide", "📖", "운영 설명서")]
+DB_OF = {"posts": "notion_db_id", "plan": "notion_plan_db_id", "whatif": "notion_whatif_db_id",
+         "ideas": "notion_ideas_db_id", "timetable": "notion_timetable_db_id"}
+# 보기 이름 통일: 이모지 + 이름 (옛 이름 → 새 이름)
+VIEW_NAMES = {"전체": "📋 전체", "상태별": "🗂 상태별", "최근": "📋 최근", "이번 주": "🗓 이번 주", "Default view": "📋 전체"}
 
 IDEA_NEW, IDEA_DONE, IDEA_HOLD = "새 아이디어", "정리됨", "보류"
 IDEA_PROPS = {
@@ -52,6 +54,10 @@ INTRO = {
              "• 기존 시리즈에 맞으면 → 그 시리즈 '다듬은 규칙'의 다음 회차 후보로\n"
              "• 새 시리즈감이면 → 🧭 시리즈 기획에 '새 요청' 줄을 만들어요 (거기서 검토 후 '사용')\n"
              "• 애매하면 '보류'와 이유를 '결과'에 남겨요.",
+    "whatif": "'만약에 3D 릴스'가 매주 여기서 하나씩 골라요: 데이터 계산과 이야기를 번갈아, ⭐추천 먼저, 번호 순.\n"
+              "원칙: 상상하라고 하지 말고 직접 보여 준다 — 규칙을 먼저 정하고, 그 안에서 단계별로 커지다 결말까지 (열린 결말 금지).\n"
+              "유형: A 불가능한 현실 · B 본 적 없는 세계 · C 존재 공포 · 데이터 계산 · 역사 바꾸기 · 과학 결말 · 사고실험. "
+              "결말을 보여 주기 어려운 주제는 '기각', 빼 두려면 '보류', 새 주제는 줄 추가.",
     "timetable": "증시는 크론 자동 게시 · 월말 마지막 거래일 16:40 월간 리포트는 표에 없음 · ⏸ 일시중지 · 📌 단발 예약(7일 안). "
                  "시리즈 기획이 바뀌면 저절로 다시 그려져요.",
 }
@@ -63,6 +69,7 @@ GUIDE = [
     ("bulleted_list_item", "2주 지난 게시됨·반려 게시물은 📥 게시물의 🗄 보관함으로 옮겨져요."),
     ("heading_2", "내가 하는 일"),
     ("bulleted_list_item", "아이디어가 떠오르면 💡 아이디어 수신함에 한 줄."),
+    ("bulleted_list_item", "만약에 릴스 주제는 🎬 만약에 주제에서 ⭐추천·보류·기각으로 고르기 (매주 토 20:00 자동)."),
     ("bulleted_list_item", "'검토 대기' 시리즈를 읽고 '사용' 또는 고쳐서 '새 요청'."),
     ("bulleted_list_item", "올라가면 안 될 게시물은 '반려'. 오류가 보이면 Claude Code에 말하기."),
     ("heading_2", "콘텐츠 규칙"),
@@ -181,6 +188,88 @@ def _posts_views(pl: Pipeline) -> list[str]:
     return done
 
 
+def _whatif_views(pl: Pipeline, db_id: str) -> list[str]:
+    n, done = pl.notion, []
+    ds = n.database(db_id)["data_sources"][0]["id"]
+    p = {k: v["id"] for k, v in n.data_source(ds)["properties"].items()}
+    if not all(k in p for k in ("주제", "유형", "상태", "추천", "번호")):
+        return done
+    cols = {"type": "table", "wrap_cells": True, "properties": [
+        {"property_id": p[k], "visible": True} for k in ("주제", "유형", "상태", "추천", "현실성", "메모", "번호") if k in p]}
+    have = {v["name"]: v for v in n.views(db_id)}
+    if "📋 전체" in have:
+        n.update_view(have["📋 전체"]["id"], {"sorts": [{"property": "번호", "direction": "ascending"}], "configuration": cols})
+    specs = [{"name": "⭐ 다음 후보", "type": "table", "filter": {"property": "상태", "select": {"equals": "대기"}},
+              "sorts": [{"property": "추천", "direction": "descending"}, {"property": "번호", "direction": "ascending"}],
+              "configuration": cols},
+             {"name": "🗂 유형별", "type": "board", "filter": {"property": "상태", "select": {"does_not_equal": "기각"}},
+              "configuration": {"type": "board", "group_by": {"type": "select", "property_id": p["유형"],
+                                                               "sort": {"type": "manual"}, "hide_empty_groups": True}}}]
+    for spec in specs:
+        if spec["name"] not in have:
+            try:
+                n.create_view({"database_id": db_id, "data_source_id": ds, **spec})
+                done.append(f"보기 {spec['name']}")
+            except RuntimeError as e:
+                log.warning("보기 %s 실패: %s", spec["name"], e)
+    return done
+
+
+def _unify(pl: Pipeline) -> list[str]:
+    """하위 페이지 = 💬 안내 + 표 하나. 표 이름·아이콘은 페이지와 같게, 보기 이름은 이모지 + 이름."""
+    n, done = pl.notion, []
+    for key, emoji, title in PAGES:
+        db_id = pl.db.kv_get(DB_OF.get(key, ""))
+        if not db_id:
+            continue
+        db = n.database(db_id)
+        if prop_title(db) != title or (db.get("icon") or {}).get("emoji") != emoji:
+            n._req("PATCH", f"/databases/{db_id}", version=VIEWS_VERSION,
+                   json={"title": rich(title), "icon": {"type": "emoji", "emoji": emoji}})
+            done.append(f"표 이름·아이콘 → {emoji} {title}")
+        for v in n.views(db_id):
+            if v["name"] in VIEW_NAMES:
+                n.update_view(v["id"], {"name": VIEW_NAMES[v["name"]]})
+        page = pl.db.kv_get(f"notion_page_{key}")
+        intro_seen = False
+        for b in n.children(page):  # 안내 콜아웃 하나 + 표만 남긴다
+            if b["type"] == "child_database":
+                continue
+            if b["type"] == "callout" and not intro_seen:
+                intro_seen = True
+                n._req("PATCH", f"/blocks/{b['id']}", json={"callout": {
+                    "rich_text": rich(INTRO[key]), "icon": {"type": "emoji", "emoji": "💬"}, "color": "gray_background"}})
+                continue
+            n._req("DELETE", f"/blocks/{b['id']}")
+    wid = pl.db.kv_get("notion_whatif_db_id")
+    if wid:
+        done += _whatif_views(pl, wid)
+    return done
+
+
+def _order_home(pl: Pipeline, home: str) -> list[str]:
+    """홈의 하위 페이지를 PAGES 순서로. 다시 넣으면 맨 뒤에 붙으므로, 처음 어긋난 곳부터 뒤를 잠깐 뺐다 넣는다."""
+    n = pl.notion
+    want = [pl.db.kv_get(f"notion_page_{k}") for k, _, _ in PAGES]
+    have = [b["id"] for b in n.children(home) if b["type"] == "child_page" and b["id"] in want]
+    order = [p for p in want if p in have]
+    if have == order:
+        return []
+    first = next(i for i, (a, b) in enumerate(zip(have, order, strict=False)) if a != b)
+    park = order[0] if first > 0 else order[-1]  # 잠깐 맡겨 둘 곳 (옮기는 대상이 아닌 페이지)
+    for pid in order[first:]:
+        if pid == park:
+            continue
+        for parent in (park, home):
+            n._req("POST", f"/pages/{pid}/move", version=VIEWS_VERSION,
+                   json={"parent": {"type": "page_id", "page_id": parent}})
+    return ["홈 하위 페이지 순서 정리"]
+
+
+def prop_title(db: dict) -> str:
+    return "".join(x.get("plain_text") or x.get("text", {}).get("content", "") for x in db.get("title") or [])
+
+
 def organize(pl: Pipeline) -> list[str]:
     """홈을 요약 + 하위 페이지로 정리한다. 반환: 한 일 목록."""
     n = pl.notion
@@ -222,6 +311,8 @@ def organize(pl: Pipeline) -> list[str]:
         if db_id and _move_db(pl, db_id, pid):
             done.append(f"{title} 표 → 하위 페이지")
     done += _posts_views(pl)
+    done += _unify(pl)
+    done += _order_home(pl, home)
     refresh_home(pl, force=True)
     return done
 
