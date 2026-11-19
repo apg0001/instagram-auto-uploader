@@ -254,6 +254,7 @@ python -m uploader sync          # 노션 결정 반영 → 기한 지난 건 �
 python -m uploader plan          # 노션 콘텐츠 기획: 새 요청 다듬기 + 때가 된 시리즈 초안 1개
 python -m uploader notion-setup <페이지>   # 게시물 표 만들기 (처음 한 번)
 python -m uploader notion-dashboard       # 홈 요약 + 하위 페이지(게시물·시리즈 기획·아이디어 수신함·타임테이블·설명서)
+python -m uploader check-cards [-n 8]      # 템플릿 고친 뒤 최근 게시물 다시 찍어 겹침·잘림 검사
 python -m uploader engagement             # 좋아요·댓글 수 → 노션, 댓글 속 아이디어 → 아이디어 수신함 (config engagement)
 python -m uploader list
 python -m uploader approve <id>  # 노션 없이 (reject도 있음)
@@ -292,7 +293,7 @@ uploader/
   sources/agent_office.py  🏢 Agent Office 합성 데모 녹화 (로그인 상태면 중단)
   sources/github_trending.py ⭐ GitHub Trending 주간 수집·스냅샷·지난주 비교
   github_reel.py           ⭐ 깃허브 Top 5 릴스 장면·내레이션·믹스
-  tts.py                   🗣 edge-tts 한국어 내레이션
+  tts.py                   🗣 edge-tts (타입캐스트가 실패할 때만)
   bgm.py                   🎵 시드별 BGM 합성
   themes.py                🎨 주제별 카드 색
   planner.py               🗓 노션 대시보드 보기 + 콘텐츠 기획 (다듬기·주기 실행)
@@ -320,6 +321,8 @@ config.yaml                ⚙️ 설정 (비밀 값은 .env)
 ```
 
 ## 🛡 안전장치
+
+- **카드 자동 검사**: 찍기 직전 그림 등 장식이 글자를 가리면 장식을 숨기고, 글자가 카드 밖으로 잘리면 그 게시물은 만들지 않습니다. 템플릿을 고친 뒤에는 `check-cards`로 최근 게시물을 다시 찍어 확인합니다.
 
 - **지금은 전부 자동 승인입니다** (`config.yaml`의 `auto_approve: ["*"]`). 초안이 노션에 '승인'으로 올라가고, 예약 시각(없으면 다음 sync)에 게시됩니다. 그 전에 노션에서 '반려'로 바꾸면 취소됩니다. 접두어 목록(예: `[market]`)으로 바꾸면 그 소스만 자동 승인하고 나머지는 사람 승인을 기다립니다.
 - 노션 기획 시리즈는 게시 5시간 전에 초안이 만들어지므로, 그 사이에 확인하고 반려할 수 있습니다.

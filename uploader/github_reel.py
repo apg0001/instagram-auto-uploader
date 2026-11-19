@@ -16,7 +16,7 @@ from typing import Any
 
 from PIL import Image, ImageDraw, ImageFont
 
-from . import bgm, themes, tts
+from . import bgm, themes, tts, typecast
 from .caption import CaptionError, call_claude, parse_json
 from .compose import band, chip, font, text_block
 from .sources.github_trending import Repo, change, insight
@@ -284,11 +284,15 @@ def _ff(args: list[str]) -> None:
         raise RuntimeError(f"ffmpeg 실패: {p.stderr[-800:]}")
 
 
-def voice(scenes: list[Scene], work: Path, voice_name: str, rate: str) -> bool:
-    """장면마다 TTS. 하나라도 실패하면 음성 없이(BGM만) 간다 → False."""
+def voice(scenes: list[Scene], work: Path, voice_name: str, rate: str, cache: Path | None = None) -> bool:
+    """장면마다 타입캐스트 내레이션 (앞뒤 문장을 감정 문맥으로). 키가 없거나 실패하면 edge-tts(voice_name, rate).
+    edge-tts까지 실패하면 음성 없이(BGM만) 간다 → False."""
     try:
         for i, s in enumerate(scenes):
-            s.audio = tts.synth(s.say, work / f"say{i}.mp3", voice_name, rate)
+            prev = scenes[i - 1].say if i else ""
+            nxt = scenes[i + 1].say if i + 1 < len(scenes) else ""
+            s.audio = typecast.synth(s.say, work / f"say{i}.mp3", cache or work / "tts", prev=prev, nxt=nxt,
+                                     fallback_voice=voice_name, fallback_rate=rate)
             s.seconds = max(tts.duration(s.audio) + 0.5, 2.5)
         return True
     except tts.TTSError as e:

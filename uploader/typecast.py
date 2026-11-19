@@ -24,7 +24,7 @@ DEFAULT_VOICE = "tc_692799c46508f6b9468c54c7"  # 다은 (릴스·쇼츠, 20대 �
 
 
 def synth(text: str, out: Path, cache_dir: Path, voice: str = DEFAULT_VOICE, prev: str = "", nxt: str = "",
-          tempo: float = 1.1, fallback_voice: str = "ko-KR-SunHiNeural") -> Path:
+          tempo: float = 1.1, fallback_voice: str = "ko-KR-SunHiNeural", fallback_rate: str = "+12%") -> Path:
     """text 를 mp3 로. 반환 경로는 캐시 파일(타입캐스트) 또는 out(edge-tts 대체)."""
     cache_dir.mkdir(parents=True, exist_ok=True)
     f = cache_dir / (hashlib.sha1(f"{voice}|{tempo}|{text}".encode()).hexdigest()[:16] + ".mp3")
@@ -43,4 +43,5 @@ def synth(text: str, out: Path, cache_dir: Path, voice: str = DEFAULT_VOICE, pre
             log.warning("타입캐스트 실패 %s: %s", r.status_code, r.text[:200])
         except requests.RequestException as e:
             log.warning("타입캐스트 오류: %s", e)
-    return tts.synth(text, out, fallback_voice, "+12%")
+    log.warning("타입캐스트 대신 edge-tts 사용: %s", text[:30])
+    return tts.synth(text, out, fallback_voice, fallback_rate)

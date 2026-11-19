@@ -44,6 +44,8 @@ def main(argv: list[str] | None = None) -> int:
     w = sub.add_parser("whatif", help="'만약에' 3D 릴스 (--spec 대본 틀 JSON, 없으면 노션 시리즈 지침으로 Claude가 씀)")
     w.add_argument("--spec", help="대본 틀 JSON 파일")
     w.add_argument("--at", help="예약 시각 (예: 2026-11-21T20:00)")
+    cc = sub.add_parser("check-cards", help="템플릿을 고친 뒤: 최근 게시물을 지금 템플릿으로 다시 찍어 겹침·잘림 검사 (올리지 않음)")
+    cc.add_argument("-n", type=int, default=8)
     sub.add_parser("engagement", help="최근 게시물 좋아요·댓글 수를 노션에, 댓글 속 아이디어를 아이디어 수신함에")
     n = sub.add_parser("notion-setup", help="노션 페이지 아래에 게시물 DB 생성")
     n.add_argument("parent", help="통합을 연결한 노션 페이지 URL 또는 id")
@@ -122,6 +124,14 @@ def main(argv: list[str] | None = None) -> int:
         at = datetime.fromisoformat(args.at).replace(tzinfo=pl.tz).timestamp() if args.at else None
         post = pl.generate_whatif(brief, at, spec)
         print(post.id, post.status)
+    elif args.cmd == "check-cards":
+        from .cards.render import regress
+        out = pl.cfg.data_dir / "check-cards"
+        res = regress(pl.cfg.data_dir, out, args.n)
+        print("\n".join(f"{pid}  {r}" for pid, r in res) or "다시 찍을 게시물 없음")
+        print(f"이미지: {out} (눈으로 확인)")
+        if any(not r.startswith("OK") for _, r in res):
+            return 1
     elif args.cmd == "engagement":
         from . import engagement
         print(engagement.collect(pl) or "꺼져 있음 (config engagement.enabled)")
