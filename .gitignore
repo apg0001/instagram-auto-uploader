@@ -4,3 +4,5 @@ data/
 media-repo/
 __pycache__/
 *.pyc
+video/whatif/node_modules/
+video/whatif/out/
