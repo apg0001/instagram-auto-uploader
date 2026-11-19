@@ -1,0 +1,2 @@
+RobotExpressive.glb — Tomás Laulhé (Quaternius), CC0 1.0. three.js 예제판(표정 모프 추가: Don McCurdy).
+https://github.com/mrdoob/three.js/tree/r170/examples/models/gltf/RobotExpressive

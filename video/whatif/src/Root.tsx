@@ -1,4 +1,5 @@
 import { Composition } from "remotion";
+import { ShadowTest } from "./ShadowTest";
 import { WhatIf, WhatIfProps, calcWhatIf } from "./WhatIf";
 
 const sample: WhatIfProps = {
@@ -15,6 +16,8 @@ const sample: WhatIfProps = {
 };
 
 export const RemotionRoot: React.FC = () => (
+  <>
+  <Composition id="ShadowTest" component={ShadowTest} durationInFrames={300} fps={30} width={1080} height={1920} />
   <Composition
     id="WhatIf"
     component={WhatIf}
@@ -25,4 +28,5 @@ export const RemotionRoot: React.FC = () => (
     defaultProps={sample}
     calculateMetadata={calcWhatIf}
   />
+  </>
 );
