@@ -41,7 +41,7 @@ notion:
 
 # 주간 깃허브 인기 레포 Top 5 릴스 (generate --source github-trending, 노션 기획 DB '생성기'로도 실행)
 github_trending:
-  voice: ko-KR-SunHiNeural      # edge-tts 한국어 음성 (InJoonNeural 남성, HyunsuMultilingualNeural 남성·영어 이름 발음 좋음)
+  voice: ko-KR-SunHiNeural      # 내레이션은 타입캐스트(다은), 이건 실패할 때 대신 쓰는 edge-tts 음성 (InJoonNeural 남성, HyunsuMultilingualNeural 남성·영어 이름 발음 좋음)
   rate: "+15%"
   reel_offset_hours: 8          # 예약이 있으면 캐러셀은 그 시각, 릴스는 이만큼 뒤 (일 12:00 → 20:00)
 

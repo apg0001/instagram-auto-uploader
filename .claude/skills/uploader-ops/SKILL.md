@@ -22,7 +22,11 @@ nice -n 19 .venv/bin/python -m uploader generate --source <소스> [--at 2026-11
 ```
 - 결과는 노션 📥 게시물 표에 올라간다. 지금은 전부 자동 승인(`auto_approve: ["*"]`) — 취소는 노션에서 '반려'.
 - `--at`은 노션 '예약'에 들어가고, 그 시각 전에는 승인돼도 올라가지 않는다. 하루 한 편 시리즈는 이걸로 미리 쌓는다.
-- 만든 뒤 꼭 눈으로 확인: 릴스는 첫 프레임(=커버)과 장면 몇 개를 이어 붙여 본다.
+- 카드는 찍기 직전 자동 검사(`cards/render.check_layout`): 그림 등 `data-decor` 장식이 글자 줄과 겹치면 숨기고,
+  글자가 카드 밖으로 잘리면 `CardLayoutError`로 멈춘다. 새 장식 요소에는 꼭 `data-decor`를 붙인다.
+- **템플릿·카드 CSS를 고쳤으면 커밋 전에** `nice -n 19 .venv/bin/python -m uploader check-cards` (최근 8개 다시 찍기)
+  → 전부 OK인지 + `data/check-cards/` 이미지를 눈으로. 이미 예약된 게시물이 옛 템플릿으로 만들어졌으면 다시 찍어 바꾼다.
+- 만든 뒤 꼭 눈으로 확인: 카드는 전 장을 한 장으로 이어 붙여 보고(오른쪽 위 그림·글자 겹침, 잘림), 릴스는 첫 프레임(=커버)과 장면 몇 개를 이어 붙여 본다.
   ```bash
   ffmpeg -v error -i a.jpg -i b.jpg -filter_complex "[0]scale=360:-1[a];[1]scale=360:-1[b];[a][b]hstack=2" sheet.jpg
   ```

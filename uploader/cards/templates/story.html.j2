@@ -48,7 +48,7 @@
       </div>{% endfor %}
     </div>{% endif %}
   {% endif %}
-  {% if art %}<div class="art" id="art">{{ art|safe }}</div>
+  {% if art %}<div class="art" id="art" data-decor>{{ art|safe }}</div>
   <script>
     // 글이 끝난 곳부터 하단 문구 위까지 남는 공간에 일러스트를 맞춘다 (모자라면 숨김)
     document.fonts.ready.then(() => {

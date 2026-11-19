@@ -74,6 +74,46 @@ def env() -> Environment:
     return e
 
 
+class CardLayoutError(RuntimeError):
+    """글자가 카드 밖으로 잘림 — 이대로 올리면 안 된다."""
+
+
+# 찍기 직전 자동 검사 (모든 템플릿 공통):
+#  1) data-decor 요소(그림 등 장식)가 실제 글자 줄과 겹치면 장식을 숨긴다
+#  2) 글자 줄이 카드 밖으로 나가면 잘린 글자 목록을 돌려준다 → CardLayoutError
+# 요소 상자가 아니라 글자 노드의 줄 상자(Range.getClientRects)로 잰다 (여백·패딩은 겹침이 아님).
+LAYOUT_CHECK = """() => {
+  const W = innerWidth, H = innerHeight, lines = [];
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (!n.textContent.trim() || n.parentElement.closest('[data-decor], script, style')) continue;
+    const cs = getComputedStyle(n.parentElement);
+    if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity === 0) continue;
+    const rg = document.createRange(); rg.selectNodeContents(n);
+    for (const r of rg.getClientRects()) if (r.width > 0 && r.height > 0) lines.push({r, t: n.textContent.trim().slice(0, 30)});
+  }
+  const hit = (a, b) => a.left < b.right - 2 && b.left < a.right - 2 && a.top < b.bottom - 2 && b.top < a.bottom - 2;
+  const hidden = [];
+  for (const d of document.querySelectorAll('[data-decor]')) {
+    if (getComputedStyle(d).display === 'none') continue;
+    const r = d.getBoundingClientRect();
+    const over = lines.filter(l => hit(r, l.r));
+    if (over.length) { d.style.display = 'none'; hidden.push(over[0].t); }
+  }
+  const clipped = lines.filter(l => l.r.right > W + 1 || l.r.bottom > H + 1 || l.r.left < -1 || l.r.top < -1).map(l => l.t);
+  return {hidden, clipped};
+}"""
+
+
+def check_layout(page: Any, name: str, i: int) -> dict[str, list[str]]:
+    res = page.evaluate(LAYOUT_CHECK)
+    if res["hidden"]:
+        log.warning("카드 %d(%s): 그림이 글자('%s')를 가려 그림을 숨김", i, name, res["hidden"][0])
+    if res["clipped"]:
+        raise CardLayoutError(f"카드 {i}({name}): 글자가 카드 밖으로 잘림 — {res['clipped'][:3]}")
+    return res
+
+
 def render(slides: list[tuple[str, dict[str, Any]]], out_dir: Path, prefix: str = "",
            theme: dict[str, str] | None = None) -> list[Path]:
     """slides: [(템플릿 이름, 컨텍스트)]. JPEG 경로 목록을 돌려준다 (인스타 이미지는 JPEG만).
@@ -95,6 +135,7 @@ def render(slides: list[tuple[str, dict[str, Any]]], out_dir: Path, prefix: str 
             zoom = page.evaluate("document.fonts.ready.then(() => { window.fit && window.fit(); return document.body.dataset.zoom; })")
             if zoom and float(zoom) <= 0.71:
                 log.warning("카드 %s: 내용이 많아 70%%까지 줄였는데도 넘칠 수 있음", name)
+            check_layout(page, name, i)
             png = Path(tmp) / f"{i}.png"
             page.screenshot(path=str(png), clip={"x": 0, "y": 0, "width": SIZE[0], "height": SIZE[1]})
             out = out_dir / f"{prefix}{i}.jpg"
@@ -102,3 +143,38 @@ def render(slides: list[tuple[str, dict[str, Any]]], out_dir: Path, prefix: str 
             paths.append(out)
         browser.close()
     return paths
+
+
+def regress(data_dir: Path, out_dir: Path, n: int = 8) -> list[tuple[str, str]]:
+    """최근 게시물을 지금 템플릿으로 다시 찍어 본다 (템플릿을 고친 뒤 확인용, 올리지는 않음).
+    다시 찍을 수 있는 것: 웹 조사 카드뉴스(content.json + art.json), 증시(snapshot.json + analysis.json).
+    반환: [(게시물 id, 'OK n장' | 'LAYOUT …' | 'ERR …')]."""
+    import json
+
+    from .. import custom, themes
+    from ..market import report
+
+    posts = sorted((d for d in (data_dir / "posts").iterdir() if d.is_dir()), key=lambda d: d.name, reverse=True)
+    out = []
+    for d in posts:
+        if len(out) >= n:
+            break
+        try:
+            if (d / "content.json").exists() and (d / "art.json").exists():
+                topic = "project" if "-project-" in d.name else "tech"
+                c = json.loads((d / "content.json").read_text())
+                a = json.loads((d / "art.json").read_text())
+                paths = render(custom.template_slides(c, a, None), out_dir / d.name, theme=themes.css(topic))
+            elif (d / "snapshot.json").exists() and (d / "analysis.json").exists():
+                paths = render(report.slides(json.loads((d / "snapshot.json").read_text()),
+                                             json.loads((d / "analysis.json").read_text())),
+                               out_dir / d.name, theme=themes.css("market"))
+            else:
+                continue
+            out.append((d.name, f"OK {len(paths)}장"))
+        except CardLayoutError as e:
+            out.append((d.name, f"LAYOUT {e}"))
+        except Exception as e:  # noqa: BLE001
+            out.append((d.name, f"ERR {type(e).__name__}: {str(e)[:100]}"))
+    return out
+
