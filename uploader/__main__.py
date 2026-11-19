@@ -41,6 +41,9 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("refresh-token", help="인스타 장기 토큰 갱신")
     sub.add_parser("notion-dashboard", help="노션 게시물 DB에 주제·보기를 만들고 콘텐츠 기획 DB를 붙인다")
     sub.add_parser("plan", help="노션 콘텐츠 기획 처리: 새 요청 다듬기 + 때가 된 정기 초안 생성")
+    w = sub.add_parser("whatif", help="'만약에' 3D 릴스 (--spec 대본 틀 JSON, 없으면 노션 시리즈 지침으로 Claude가 씀)")
+    w.add_argument("--spec", help="대본 틀 JSON 파일")
+    w.add_argument("--at", help="예약 시각 (예: 2026-11-21T20:00)")
     sub.add_parser("engagement", help="최근 게시물 좋아요·댓글 수를 노션에, 댓글 속 아이디어를 아이디어 수신함에")
     n = sub.add_parser("notion-setup", help="노션 페이지 아래에 게시물 DB 생성")
     n.add_argument("parent", help="통합을 연결한 노션 페이지 URL 또는 id")
@@ -106,6 +109,19 @@ def main(argv: list[str] | None = None) -> int:
     elif args.cmd == "plan":
         from . import planner
         planner.run(pl)
+    elif args.cmd == "whatif":
+        import json as _json
+
+        from . import planner
+        spec = _json.loads(Path(args.spec).read_text(encoding="utf-8")) if args.spec else None
+        brief = ""
+        if not spec and pl.notion and pl.db.kv_get("notion_plan_db_id"):
+            row = next((r for r in pl.notion.query(pl.db.kv_get("notion_plan_db_id"))
+                        if planner.prop_text(r["properties"], "생성기") == "만약에 3D 릴스"), None)
+            brief = planner.brief_for(pl, row["properties"]) if row else ""
+        at = datetime.fromisoformat(args.at).replace(tzinfo=pl.tz).timestamp() if args.at else None
+        post = pl.generate_whatif(brief, at, spec)
+        print(post.id, post.status)
     elif args.cmd == "engagement":
         from . import engagement
         print(engagement.collect(pl) or "꺼져 있음 (config engagement.enabled)")
