@@ -1,7 +1,7 @@
 """노션 작업 공간 — 홈은 '오늘 요약'만, 표는 하위 페이지에 하나씩.
 
 🏠 홈 (notion-setup 때 고른 페이지)
- ├ 📌 오늘 요약 (콜아웃, plan 때마다 바뀌었으면 다시 씀)
+ ├ 📌 오늘 요약 (콜아웃) + 🗓 이번 주 올라갈 것 (표) — plan 때마다 바뀌었으면 다시 씀
  ├ 📥 게시물          — 게시물 DB. 2주 지난 게시됨·반려는 '보관'에 체크돼 🗄 보관함 보기로만 보인다
  ├ 🧭 시리즈 기획      — 콘텐츠 기획 DB + 쓰는 법
  ├ 💡 아이디어 수신함   — 한 줄 적으면 Claude가 기존 시리즈의 다음 회차 후보로 넣거나 새 시리즈 요청을 만든다
@@ -197,8 +197,8 @@ def organize(pl: Pipeline) -> list[str]:
     bookmarks = []
     summary = pl.db.kv_get("notion_home_summary_block")
     for b in n.children(home):
-        if b["type"] in ("child_database", "child_page") or b["id"] == summary:
-            continue
+        if b["type"] not in ("heading_2", "paragraph", "callout", "bookmark") or b["id"] == summary:
+            continue  # 하위 페이지·이번 주 표(heading_3·table)는 그대로
         if b["type"] == "bookmark":
             bookmarks.append(b["bookmark"]["url"])
         n._req("DELETE", f"/blocks/{b['id']}")
@@ -289,6 +289,75 @@ def summary_text(now: datetime, posts: list[dict], plan_rows: list[dict], ideas:
     return "\n".join(lines)
 
 
+def _dt(text: str, tz) -> datetime | None:
+    if not text:
+        return None
+    dt = datetime.fromisoformat(text)
+    return (dt if dt.tzinfo else dt.replace(tzinfo=tz)).astimezone(tz)
+
+
+def week_rows(now: datetime, posts: list[dict], plan_rows: list[dict]) -> list[tuple[datetime, str, str]]:
+    """오늘~일요일에 올라갈 것: (시각, 무엇, 상태). 만들어진 예약 게시물 + 앞으로 만들 시리즈 회차 + 증시 크론."""
+    from . import planner, timetable
+
+    end = (now + timedelta(days=6 - now.weekday())).replace(hour=23, minute=59, second=59, microsecond=0)
+    out: list[tuple[datetime, str, str]] = []
+    taken: set[str] = set()
+    for r in posts:
+        pr = r["properties"]
+        st, at = prop_text(pr, "상태"), _dt(prop_text(pr, "예약"), now.tzinfo)
+        if st in ("초안", "승인") and at and now - timedelta(minutes=5) <= at <= end:
+            out.append((at, short_title(prop_text(pr, "제목"), 60), "✅ 준비됨" if st == "승인" else "📝 초안"))
+            taken.add(f"{at:%m%d%H%M}")
+    for r in plan_rows:
+        pr = r["properties"]
+        if prop_text(pr, "상태") != "사용":
+            continue
+        name, cadence = prop_text(pr, "이름"), prop_text(pr, "주기") or "한 번"
+        days, time_text = prop_text(pr, "요일").split(","), prop_text(pr, "게시 시각")
+        at = _dt(prop_text(pr, "다음 게시"), now.tzinfo) or planner.next_run(cadence, days, time_text, now)
+        hops = 0
+        while at and at <= end and hops < 14:
+            reel = prop_text(pr, "생성기") == "깃허브 트렌딩 릴스"
+            for t, label in ((at, f"{name} 캐러셀" if reel else name),) + (((at + timedelta(hours=8), f"{name} 릴스"),) if reel else ()):
+                if t >= now - timedelta(minutes=5) and t <= end and f"{t:%m%d%H%M}" not in taken:
+                    out.append((t, label, "⏳ 만들 예정"))
+            if cadence == "한 번":
+                break
+            at = planner.next_run(cadence, days, time_text, at, at)
+            hops += 1
+    day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    while day <= end:
+        for hm, wdays, name in timetable.MARKET:
+            h, m = (int(x) for x in hm.split(":"))
+            t = day.replace(hour=h, minute=m)
+            if DAYS_KO[t.weekday()] in wdays and t >= now - timedelta(minutes=5):
+                out.append((t, f"📈 {name}", "🤖 자동"))
+        day += timedelta(days=1)
+    return sorted(out, key=lambda x: (x[0], x[1]))
+
+
+DAYS_KO = "월화수목금토일"
+
+
+def week_table(rows: list[tuple[datetime, str, str]]) -> dict:
+    def cell(t: str) -> list[dict]:
+        return rich(t)
+
+    head = {"type": "table_row", "table_row": {"cells": [cell("날짜"), cell("시각"), cell("무엇"), cell("상태")]}}
+    body = []
+    prev = ""
+    for t, what, st in rows:
+        d = f"{t:%m/%d}({DAYS_KO[t.weekday()]})"
+        body.append({"type": "table_row", "table_row": {"cells": [cell(d if d != prev else ""), cell(f"{t:%H:%M}"),
+                                                                    cell(what), cell(st)]}})
+        prev = d
+    if not body:
+        body = [{"type": "table_row", "table_row": {"cells": [cell(""), cell(""), cell("이번 주에 남은 게시 없음"), cell("")]}}]
+    return {"object": "block", "type": "table",
+            "table": {"table_width": 4, "has_column_header": True, "has_row_header": False, "children": [head, *body]}}
+
+
 def refresh_home(pl: Pipeline, plan_rows: list[dict] | None = None, force: bool = False) -> bool:
     n, block = pl.notion, pl.db.kv_get("notion_home_summary_block")
     if not n or not block:
@@ -300,10 +369,24 @@ def refresh_home(pl: Pipeline, plan_rows: list[dict] | None = None, force: bool 
     ideas_db = pl.db.kv_get("notion_ideas_db_id")
     ideas = n.query(ideas_db) if ideas_db else []
     text = summary_text(now, posts, plan_rows, ideas)
-    digest = hashlib.sha1(text.encode()).hexdigest()
+    week = week_rows(now, posts, plan_rows)
+    digest = hashlib.sha1((text + repr([(f"{t:%m%d%H%M}", w, s) for t, w, s in week])).encode()).hexdigest()
     if not force and pl.db.kv_get("home_digest") == digest:
         return False
     n._req("PATCH", f"/blocks/{block}", json={"callout": {"rich_text": rich(text)}})
+    # 이번 주 표: 지우고 요약 바로 아래에 다시 (행 수가 바뀌므로 통째로)
+    old = pl.db.kv_get("notion_home_week_block")
+    if old:
+        try:
+            n._req("DELETE", f"/blocks/{old}")
+        except RuntimeError:
+            pass
+    else:
+        n.append(pl.db.kv_get("notion_home_page_id"), [_block("heading_3", "🗓 이번 주 올라갈 것")], after=block)
+    head = next((b["id"] for b in n.children(pl.db.kv_get("notion_home_page_id"))
+                 if b["type"] == "heading_3"), block)
+    new = n.append(pl.db.kv_get("notion_home_page_id"), [week_table(week)], after=head)[0]["id"]
+    pl.db.kv_set("notion_home_week_block", new)
     pl.db.kv_set("home_digest", digest)
     return True
 

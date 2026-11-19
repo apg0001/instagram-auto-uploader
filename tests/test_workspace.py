@@ -13,9 +13,11 @@ def rich(text):  # 노션이 돌려주는 모양 (plain_text 포함)
 def row(**props):
     out = {}
     for k, v in props.items():
-        if k in ("상태", "출처"):
+        if k in ("상태", "출처", "주기", "생성기"):
             out[k] = {"type": "select", "select": {"name": v} if v else None}
-        elif k == "예약":
+        elif k == "요일":
+            out[k] = {"type": "multi_select", "multi_select": [{"name": d} for d in v.split(",")]}
+        elif k in ("예약", "다음 게시"):
             out[k] = {"type": "date", "date": {"start": v}}
         elif k in ("제목", "아이디어", "이름"):
             out[k] = {"type": "title", "title": rich(v)}
@@ -63,3 +65,24 @@ def test_short_title():
     assert workspace.short_title("[주 2회 신규 기술 브리핑] [기술 브리핑] Gemini 출시") == "주 2회 신규 기술 브리핑 · Gemini 출시"
     assert workspace.short_title("그냥 제목") == "그냥 제목"
     assert len(workspace.short_title("[a] " + "가" * 80)) == 48
+
+
+def test_week_rows_mix_posts_plan_and_market():
+    now = datetime(2026, 11, 20, 10, 0, tzinfo=KST)  # 금
+    posts = [row(제목="[랩워즈 소개] 장비 뽑기", 상태="승인", 예약="2026-11-20T20:00:00+09:00"),
+             row(제목="[X] 다음 주", 상태="승인", 예약="2026-11-23T12:00:00+09:00")]
+    plan = [row(이름="증시 용어 한 장", 상태="사용", 주기="매주", 요일="금", **{"게시 시각": "12:00"},
+                **{"다음 게시": "2026-11-20T12:00:00+09:00"}),
+            row(이름="AI 공감 모먼트", 상태="사용", 주기="매주", 요일="토", **{"게시 시각": "12:00"}),
+            row(이름="쉬는 줄", 상태="일시중지", 주기="매주", 요일="토", **{"게시 시각": "16:00"})]
+    rows = workspace.week_rows(now, posts, plan)
+    got = [(f"{t:%a %H:%M}", w, s) for t, w, s in rows]
+    assert ("Fri 12:00", "증시 용어 한 장", "⏳ 만들 예정") in got
+    assert ("Fri 16:00", "📈 장 마감 시황", "🤖 자동") in got
+    assert ("Fri 20:00", "랩워즈 소개 · 장비 뽑기", "✅ 준비됨") in got
+    assert ("Sat 09:00", "📈 주간 증시 리포트", "🤖 자동") in got
+    assert ("Sat 12:00", "AI 공감 모먼트", "⏳ 만들 예정") in got
+    assert not any("다음 주" in w or "쉬는" in w or "07:30" in t for t, w, _ in got)
+    assert [r[0] for r in rows] == sorted(r[0] for r in rows)
+    table = workspace.week_table(rows)
+    assert table["table"]["table_width"] == 4 and len(table["table"]["children"]) == len(rows) + 1
