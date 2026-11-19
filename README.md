@@ -82,6 +82,19 @@ flowchart LR
 5. **게시** — 릴스는 릴스 탭에만(Make의 Share to Feed = No), 피드에는 캐러셀·이미지만 올라가 그리드가 겹치지 않습니다. `sync`가 승인 건을 Instagram API(또는 [Make 웹훅](docs/make.md))로 올리고 '게시됨'과 인스타 링크를 채웁니다.
 6. **정리** — 게시·반려 후 7일이 지난 미디어는 ig-media에서 **히스토리째** 지웁니다. 인스타그램은 게시할 때 파일을 복사해 가므로 원본이 필요 없습니다.
 
+### 🧊 만약에 3D 릴스
+
+"매일 쓰는 그 돈을 그때부터 ○○에 넣었다면?" — 보는 사람 습관을 찔러 댓글을 부르는 35~45초 3D 릴스 (노션 생성기 **만약에 3D 릴스**, 토 20:00).
+
+1. **대본 틀**: Claude가 시리즈 지침·후보 중 하나로 9박자 대본을 쓰되 **숫자는 직접 못 쓰고** `{value}` `{mdd}` 같은 자리 표시만 (어기면 다시 쓰게 함).
+2. **계산**: 하루 금액 × 30일을 시작 달부터 매달 자산에 넣었다고 보고 야후 수정주가 + FRED 원/달러로 넣은 돈·지금 가치·배수·한 잔당 가치·최대 낙폭·연말 막대를 계산해 채움.
+3. **소리**: 장면별 타입캐스트 내레이션(문맥 감정, 같은 문장은 `data/tts-cache` 재사용) → 장면 길이. 합성 BGM은 내레이션 때 줄임.
+4. **영상**: [`video/whatif`](video/whatif) Remotion + three.js (`@remotion/three`) — 장면마다 spin·pile·growth·rise·crash·end 중 하나, 물체는 커피잔·금화. 파이에서는 `--gl=swangle`.
+
+```bash
+python -m uploader whatif --spec ep.json --at 2026-11-21T20:00   # 대본 틀을 직접 주기 (없으면 Claude가 씀)
+```
+
 ### 🎨 카드 디자인
 
 카드는 HTML(Jinja2)로 만들고 Playwright로 찍습니다. 디자인 원칙은 Anthropic이 공개한 [`anthropics/skills`](https://github.com/anthropics/skills)의 **frontend-design**, **canvas-design** 스킬(Apache-2.0, [`prompts/anthropic-skills/`](prompts/anthropic-skills))을 따릅니다.
@@ -282,6 +295,8 @@ uploader/
   bgm.py                   🎵 시드별 BGM 합성
   themes.py                🎨 주제별 카드 색
   planner.py               🗓 노션 대시보드 보기 + 콘텐츠 기획 (다듬기·주기 실행)
+  whatif.py                🧊 만약에 3D 릴스 (계산·대본 틀·내레이션·Remotion 렌더)
+  typecast.py              🗣 타입캐스트 내레이션 (캐시, 실패 시 edge-tts)
   timetable.py             🕒 노션 주간 타임테이블 (증시 크론 + 기획 표 + 단발 예약 → 시각×요일 표)
   workspace.py             🏠 노션 홈 요약·하위 페이지·보관함·아이디어 수신함 정리
   shots.py                 🖥 '실제 화면' 카드 (공개 웹페이지 캡처)

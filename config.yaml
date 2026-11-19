@@ -24,6 +24,11 @@ instagram:
 # 예약이 있는 게시물은 승인돼도 예약 시각까지 기다린다. (2026-11-18 사용자 결정: 전부 자동 승인)
 auto_approve: ["*"]
 
+# '만약에' 3D 릴스 (video/whatif, Remotion). 처음 한 번: cd video/whatif && npm ci (Node 22, ~/.local/node)
+whatif:
+  voice: tc_692799c46508f6b9468c54c7   # 타입캐스트 '다은' (.env TYPECAST_API_KEY, 없으면 edge-tts)
+  node_bin: null                       # null 이면 ~/.local/node/bin
+
 # 반응 모으기 (uploader engagement, 크론 하루 한 번): 좋아요·댓글 수 → 노션, 댓글 속 아이디어 → 아이디어 수신함.
 # make 모드는 Make 시나리오에 engagement 경로를 만든 뒤 켠다 (docs/make.md 5번). 게시물 하나 = Make 작업 3~4개.
 engagement:

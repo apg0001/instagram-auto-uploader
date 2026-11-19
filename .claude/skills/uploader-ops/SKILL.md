@@ -55,3 +55,10 @@ nice -n 19 .venv/bin/python -m uploader generate --source <소스> [--at 2026-11
 - 한국어 이슈 → develop에서 `feat/#번호-설명` → 커밋 `[feat] 설명 (#번호)` → PR(develop) → CI Gate 통과 후 병합.
 - 릴리스: develop→main PR `[release] x.y.z` → `mergeStateStatus`가 CLEAN일 때 병합 → **병합 후** `gh release create vX.Y.Z` → 백머지 이슈·브랜치·PR.
 - 파이 작업본은 늘 `main`으로 돌려 두고, `deploy/crontab`이 바뀌었으면 `crontab deploy/crontab`.
+
+## 7. 만약에 3D 릴스
+- `video/whatif` (Remotion 4 + three.js). Node는 `~/.local/node/bin`. 의존성은 `cd video/whatif && npm ci` (node_modules는 git 밖).
+- 3D 규칙(remotion 3d 스킬): `<ThreeCanvas>`, 움직임은 `useCurrentFrame()`으로만, 렌더는 `--gl=swangle`. 1분 영상 렌더 약 5분 — 무거운 작업 규칙대로 혼자.
+- 숫자는 코드 계산값만 (대본 틀에 숫자 직접 금지, `whatif.check_spec`). 투자 소재는 낙폭 반전 + 면책 필수.
+- 타입캐스트 무료 15,000크레딧/월 (1자≈1크레딧). 시험 생성으로 낭비하지 말 것 — 사용자 지시(11/19).
+

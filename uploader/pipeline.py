@@ -111,6 +111,22 @@ class Pipeline:
                        res.carousel, ["image"] * len(res.carousel), None, meta, scheduled_at)
         return reel
 
+    def generate_whatif(self, brief: str, scheduled_at: float | None = None, spec: dict | None = None) -> Post:
+        """'만약에' 3D 릴스. spec 이 없으면 Claude가 brief(시리즈 지침·후보·이미 다룬 것)로 대본 틀을 쓴다."""
+        from . import whatif
+
+        src = self.cfg.raw.get("whatif") or {}
+        pid, work = self._new_id("whatif", "reels")
+        log.info("생성 시작 %s", pid)
+        spec = spec or whatif.write(brief, self.cfg.caption)
+        (work / "spec.json").write_text(json.dumps(spec, ensure_ascii=False, indent=1), encoding="utf-8")
+        res = whatif.build(spec, work / "out", voice=src.get("voice", whatif.typecast.DEFAULT_VOICE),
+                           tts_cache=self.cfg.data_dir / "tts-cache", node_bin=src.get("node_bin"),
+                           seed=int(datetime.now(self.tz).strftime("%Y%m%d")))
+        meta = {"check": "none", "topic_theme": "tech", "whatif": spec.get("topic"), "seconds": round(res.seconds, 1)}
+        return self._finalize(pid, "whatif", "REELS", f"[만약에 3D 릴스] {res.title}", res.caption, [res.video], ["video"],
+                              res.cover, meta, scheduled_at)
+
     def generate_game(self, source: str, kind: str | None, stage: str | None,
                       scheduled_at: float | None = None) -> Post:
         src = self.cfg.source(source)

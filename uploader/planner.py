@@ -31,7 +31,7 @@ log = logging.getLogger("uploader")
 NEW, REVIEW, ACTIVE, PAUSED, DONE, ERROR = "새 요청", "검토 대기", "사용", "일시중지", "완료", "오류"
 PLAN_STATUS = {NEW: "yellow", REVIEW: "orange", ACTIVE: "green", PAUSED: "gray", DONE: "blue", ERROR: "red"}
 GENERATORS = {"웹 조사 카드뉴스": "default", "깃허브 트렌딩 릴스": "blue",  # 생성기 → 만드는 방법
-              "랩워즈 플레이 릴스": "orange", "Agent Office 소개": "yellow"}
+              "랩워즈 플레이 릴스": "orange", "Agent Office 소개": "yellow", "만약에 3D 릴스": "purple"}
 CADENCES = ["한 번", "매일", "매주", "격주", "매월"]
 DAYS = ["월", "화", "수", "목", "금", "토", "일"]
 DEFAULT_TIME = "12:00"
@@ -345,6 +345,8 @@ def generate_for(pl: Pipeline, pr: dict, at: datetime | None) -> None:
         pl.generate_game("lab-wars", "REELS", None, ts)
     elif gen == "Agent Office 소개":
         pl.generate_repo("agent-office", None, ts)
+    elif gen == "만약에 3D 릴스":
+        pl.generate_whatif(brief_for(pl, pr), ts)
     else:
         topic = themes.from_ko(prop_text(pr, "주제")) or "tech"
         pl.generate_topic(brief_for(pl, pr), source=f"plan-{topic}", topic_theme=topic, title=prop_text(pr, "이름"),
