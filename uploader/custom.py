@@ -32,6 +32,10 @@ CONTENT_PROMPT = """너는 한국어 인스타그램 카드뉴스 에디터다. 
 3. 한 장에 한 가지 메시지지만 내용은 꽉 채운다: points 장은 lead 한두 문장 + 항목 3~4개(머리말 + 구체적인 설명:
    숫자·예시·비교·"그래서 뭐가 달라지나"). 빈말·반복 금지. 한 항목 설명 80자 이내.
 4. 캡션: 첫 줄 훅 → 핵심 3~5줄 → 출처 표기 → 해시태그 4~5개(관련성 높은 것만). 1500자 이내. 이모지 3개 이하.
+5. 실제 화면(shots, 0~2개): 글로만 설명하기보다 진짜 화면을 보여 주는 게 나은 경우(도구·기능·레포·공식 발표)에만.
+   로그인 없이 열리는 https 공개 페이지 중 네가 실제로 열어 본 것만: 공식 문서의 해당 기능 부분, 깃허브 레포, 릴리스 노트,
+   공식 블로그 글. 페이지 윗부분이 찍히므로 그 내용이 맨 위에 나오는 주소(가능하면 #앵커)로. 뉴스 기사·남의 사진·SNS 게시물은 안 됨.
+   after: 이 화면을 끼울 위치(그 번호의 슬라이드 다음, 1부터).
 
 # 출력 (JSON 하나만)
 {{"title": "게시물 제목(관리용)",
@@ -41,6 +45,7 @@ CONTENT_PROMPT = """너는 한국어 인스타그램 카드뉴스 에디터다. 
     {{"type": "stat", "title": "슬라이드 제목", "value": "큰 숫자나 짧은 말", "label": "무엇의 값인지", "body": "설명"}}
   ],
   "sources": ["출처 언론사·기관명"],
+  "shots": [{{"url": "https://...", "head": "화면 제목(20자 이내)", "caption": "이 화면에서 볼 것 한 줄", "after": 2}}],
   "caption": "..."}}"""
 
 DESIGN_PROMPT = """아래 디자인 지침을 따르는 디자이너로서, 주어진 카드뉴스 원고를 인스타그램 캐러셀 슬라이드 HTML로 디자인하라.
@@ -238,7 +243,9 @@ def free_design(content: dict[str, Any], cfg: dict[str, Any], out_dir: Path) -> 
 
 
 def make_topic(topic: str, cfg: dict[str, Any], out_dir: Path, design: str = "template",
-               theme: dict[str, str] | None = None, kicker: str | None = None) -> tuple[dict[str, Any], list[Path]]:
+               theme: dict[str, str] | None = None, kicker: str | None = None,
+               topic_key: str | None = None) -> tuple[dict[str, Any], list[Path]]:
+    """topic_key(tech·project 등)를 주면 원고의 'shots' 주소를 찍어 '실제 화면' 장으로 끼운다."""
     content = research(topic, cfg)
     (out_dir.parent / "content.json").write_text(json.dumps(content, ensure_ascii=False, indent=1), encoding="utf-8")
     if design == "free":
@@ -246,7 +253,14 @@ def make_topic(topic: str, cfg: dict[str, Any], out_dir: Path, design: str = "te
     art = illustrate(content, cfg, theme)
     log.info("일러스트 %d/%d장", sum(1 for a in art if a), len(content["slides"]))
     (out_dir.parent / "art.json").write_text(json.dumps(art, ensure_ascii=False), encoding="utf-8")  # 다시 그릴 때 재사용
-    return content, render(template_slides(content, art, kicker), out_dir, theme=theme)
+    media = render(template_slides(content, art, kicker), out_dir, theme=theme)
+    if topic_key and content.get("shots"):
+        from . import shots
+        try:
+            media = shots.insert(content, media, out_dir, topic_key)
+        except Exception:  # noqa: BLE001 — 화면을 못 찍어도 글 카드는 올린다
+            log.exception("실제 화면 넣기 실패")
+    return content, media
 
 
 def media_kind(files: list[Path]) -> tuple[str, list[str]]:

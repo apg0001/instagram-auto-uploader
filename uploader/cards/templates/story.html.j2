@@ -58,8 +58,10 @@
         art.style.top = top + 'px'; art.style.height = (bottom - top) + 'px'; art.style.display = 'flex';
       } else {
         // 글이 많으면 제목 옆 오른쪽 위 작은 그림으로 (제목은 그만큼 비켜 줌)
-        const head = document.querySelector('h1, .cover-title');
-        if (head) head.style.paddingRight = '230px';
+        // 제목과 바로 밑 소개 문장 모두 그림 아래쪽(338px)까지는 비켜 준다
+        for (const el of document.querySelectorAll('h1, .cover-title, .lead, .cover-sub')) {
+          if (el.getBoundingClientRect().top < 338) el.style.paddingRight = '230px';
+        }
         Object.assign(art.style, {top: '128px', left: 'auto', right: '56px', width: '210px', height: '210px', display: 'flex'});
         if (main.getBoundingClientRect().bottom > foot.getBoundingClientRect().top - 24 && window.fit) window.fit();
       }

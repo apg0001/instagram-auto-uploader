@@ -76,6 +76,35 @@ Meta 개발자 계정 없이 인스타에 게시하는 방법입니다. 노션�
    - 성공하면 게시됨으로 바뀌고 id가 기록됩니다.
    - 실패하면 노션에 오류 메시지가 남습니다. Make의 **History**에서 어느 모듈이 실패했는지 볼 수 있습니다.
 
+## 5. 반응 모으기 (선택)
+
+최근 게시물의 좋아요·댓글 수를 노션 게시물 표에 적고, 댓글 중 "이거 다뤄 주세요" 같은 것을 💡 아이디어 수신함에 넣습니다.
+업로더가 하루 한 번(21:15) 최근 3일 안에 올린 게시물마다 웹훅을 부릅니다:
+
+```json
+{"action": "engagement", "media_id": "17977084647177016"}
+```
+
+1. 라우터에 경로를 하나 더 만들고 필터를 `action` **Equal to** `engagement`로 둡니다.
+   (게시 경로들은 `kind` 로 거르므로 이 요청과 섞이지 않습니다.)
+2. **Instagram for Business → Get a Media**: Media ID ← `media_id`. 결과에서 좋아요 수·댓글 수를 씁니다.
+3. 댓글을 읽는 모듈(예: **List Comments** — 이름은 Make 버전에 따라 다를 수 있음): Media ID ← `media_id`.
+4. **Flow Control → Array aggregator**: 3번 모듈의 결과를 모으고 `id`, `text` 만 고릅니다. **쓴 사람 이름은 넣지 않습니다.**
+5. **Webhooks → Webhook response** (Status 200), Body:
+   ```json
+   {"id": "{{media_id}}", "like_count": {{2번 좋아요 수}}, "comments_count": {{2번 댓글 수}},
+    "comments": {{4번 배열}}}
+   ```
+6. `config.yaml` 의 `engagement.enabled: true`. 손으로 확인: `.venv/bin/python -m uploader engagement`
+
+Make 작업 수: 게시물 하나에 3~4개 → 하루 12편이면 하루 40개 남짓, 한 달 1,200개 정도.
+무료 플랜(월 1,000개)을 넘을 수 있으니 `engagement.days` 를 줄이거나, 공식 API(`mode: graph`)는 이 경로 없이 바로 됩니다.
+
+## 6. 스토리 (선택)
+
+`kind` = `STORIES` 경로를 만들고 Instagram for Business의 스토리 게시 모듈(있는 경우)에 `image_url` 또는 `video_url` 을 넣습니다.
+API로 올리는 스토리에는 링크 스티커를 붙일 수 없어서, 새 게시물 알림용 스토리보다는 따로 만든 세로 이미지·영상에 맞습니다.
+
 ## 실패했을 때
 
 | 메시지 | 뜻 | 할 일 |

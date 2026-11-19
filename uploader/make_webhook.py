@@ -66,3 +66,22 @@ class MakeWebhook:
 
     def permalink(self, media_id: str) -> str | None:
         return self._permalinks.get(media_id)
+
+    def ask(self, action: str, data: dict[str, Any]) -> dict[str, Any]:
+        """게시가 아닌 요청 (예: action="engagement" → 좋아요·댓글). 시나리오 라우터가 'action' 으로 나눈다.
+        게시 요청에는 action 이 없으므로, 게시 경로 필터는 'action 이 비어 있음' 이어야 한다 (docs/make.md)."""
+        r = requests.post(self.url, json={"action": action, **data}, timeout=self.timeout)
+        if r.status_code >= 400:
+            raise InstagramError(f"Make 웹훅 {r.status_code}: {r.text[:300]}")
+        try:
+            out = r.json()
+        except ValueError as e:
+            raise InstagramError(f"Make 응답이 JSON 아님 (Webhook response 확인): {r.text[:200]}") from e
+        if not isinstance(out, dict):
+            raise InstagramError(f"Make 응답 형식 이상: {r.text[:200]}")
+        return out
+
+    def engagement(self, media_id: str) -> dict[str, Any]:
+        """게시물 하나의 좋아요·댓글 수와 댓글 글 (docs/make.md 5번 경로)."""
+        return self.ask("engagement", {"media_id": media_id})
+
