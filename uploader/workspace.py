@@ -1,0 +1,371 @@
+"""노션 작업 공간 — 홈은 '오늘 요약'만, 표는 하위 페이지에 하나씩.
+
+🏠 홈 (notion-setup 때 고른 페이지)
+ ├ 📌 오늘 요약 (콜아웃, plan 때마다 바뀌었으면 다시 씀)
+ ├ 📥 게시물          — 게시물 DB. 2주 지난 게시됨·반려는 '보관'에 체크돼 🗄 보관함 보기로만 보인다
+ ├ 🧭 시리즈 기획      — 콘텐츠 기획 DB + 쓰는 법
+ ├ 💡 아이디어 수신함   — 한 줄 적으면 Claude가 기존 시리즈의 다음 회차 후보로 넣거나 새 시리즈 요청을 만든다
+ ├ 🕒 주간 타임테이블
+ └ 📖 운영 설명서
+organize() 는 여러 번 실행해도 안전하다 (만든 페이지 id는 kv `notion_page_<key>`).
+"""
+from __future__ import annotations
+
+import hashlib
+import logging
+from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
+
+from .caption import call_claude, parse_json
+from .notion import VIEWS_VERSION, prop_text, rich
+
+if TYPE_CHECKING:
+    from .pipeline import Pipeline
+
+log = logging.getLogger("uploader")
+
+ARCHIVE_DAYS = 14
+PAGES = [("posts", "📥", "게시물"), ("plan", "🧭", "시리즈 기획"), ("ideas", "💡", "아이디어 수신함"),
+         ("timetable", "🕒", "주간 타임테이블"), ("guide", "📖", "운영 설명서")]
+DB_OF = {"posts": "notion_db_id", "plan": "notion_plan_db_id", "ideas": "notion_ideas_db_id",
+         "timetable": "notion_timetable_db_id"}
+
+IDEA_NEW, IDEA_DONE, IDEA_HOLD = "새 아이디어", "정리됨", "보류"
+IDEA_PROPS = {
+    "아이디어": {"title": {}},
+    "상태": {"select": {"options": [{"name": IDEA_NEW, "color": "yellow"}, {"name": IDEA_DONE, "color": "green"},
+                                   {"name": IDEA_HOLD, "color": "gray"}]}},
+    "출처": {"select": {"options": [{"name": "직접", "color": "blue"}, {"name": "댓글", "color": "purple"}]}},
+    "결과": {"rich_text": {}},
+    "생성": {"created_time": {}},
+}
+CANDIDATES = "# 다음 회차 후보 (아이디어 수신함)"
+
+INTRO = {
+    "posts": "자동 승인이라 손댈 필요 없어요. 올라가면 안 되는 게시물만 상태를 '반려'로 바꾸세요.\n"
+             "📥 확인할 것: 초안·실패만 · 🗓 주간 예약: 올라갈 순서 · 🗄 보관함: 2주 지난 게시됨·반려",
+    "plan": "줄 하나 = 시리즈 하나. 새 줄의 '메모'에 대충 적고 상태를 '새 요청'으로 → 몇 분 안에 Claude가 이름·주기·시각·"
+            "'다듬은 규칙'을 채워 '검토 대기'로 → 괜찮으면 '사용'. '다음 게시' 5시간 전에 만들어 그 시각에 자동 게시.\n"
+            "'횟수'를 채우면 끝나고 '이어서'에 적은 줄이 시작돼요. 멈추려면 '일시중지'. "
+            "프로젝트 소개처럼 가끔 올릴 것은 '일시중지'로 두었다가 올리고 싶을 때 '사용'으로.",
+    "ideas": "떠오른 걸 '아이디어' 칸에 한 줄만 적으세요 (상태는 비워 둬도 됨). 몇 분 안에 Claude가 읽고\n"
+             "• 기존 시리즈에 맞으면 → 그 시리즈 '다듬은 규칙'의 다음 회차 후보로\n"
+             "• 새 시리즈감이면 → 🧭 시리즈 기획에 '새 요청' 줄을 만들어요 (거기서 검토 후 '사용')\n"
+             "• 애매하면 '보류'와 이유를 '결과'에 남겨요.",
+    "timetable": "증시는 크론 자동 게시 · 월말 마지막 거래일 16:40 월간 리포트는 표에 없음 · ⏸ 일시중지 · 📌 단발 예약(7일 안). "
+                 "시리즈 기획이 바뀌면 저절로 다시 그려져요.",
+}
+GUIDE = [
+    ("heading_2", "매일 저절로 일어나는 일"),
+    ("bulleted_list_item", "증시: 평일 07:30 장 전 브리핑, 16:00 장 마감 시황, 토 09:00 주간 리포트, 월말 16:40 월간 리포트."),
+    ("bulleted_list_item", "시리즈: 🧭 시리즈 기획의 '사용' 줄이 게시 5시간 전에 만들어져 그 시각에 올라가요 (자동 승인)."),
+    ("bulleted_list_item", "게시 칸: 평일 12:00·20:00, 주말 09·12·16·20시. 하루 4개 (월간 리포트 제외)."),
+    ("bulleted_list_item", "2주 지난 게시됨·반려 게시물은 📥 게시물의 🗄 보관함으로 옮겨져요."),
+    ("heading_2", "내가 하는 일"),
+    ("bulleted_list_item", "아이디어가 떠오르면 💡 아이디어 수신함에 한 줄."),
+    ("bulleted_list_item", "'검토 대기' 시리즈를 읽고 '사용' 또는 고쳐서 '새 요청'."),
+    ("bulleted_list_item", "올라가면 안 될 게시물은 '반려'. 오류가 보이면 Claude Code에 말하기."),
+    ("heading_2", "콘텐츠 규칙"),
+    ("bulleted_list_item", "사실은 확인된 출처만, 카드 마지막·캡션에 출처. 증시는 투자 권유 금지 + 면책 문구."),
+    ("bulleted_list_item", "계정 주인 실명 쓰지 않기. 랩워즈는 레포·소스 언급 없이 플레이 링크만."),
+    ("bulleted_list_item", "뻔한 것보다 잘 알려지지 않았지만 바로 써먹을 수 있는 것. 가능하면 실제 화면으로 보여 주기."),
+    ("heading_2", "Make 실행 기록 (게시가 실패했을 때 여기서 원인 확인)"),
+]
+
+IDEA_PROMPT = """너는 개발자 개인 인스타그램 계정의 콘텐츠 기획 담당이다. 계정 주인이 아이디어 수신함에 한 줄을 적었다.
+지금 돌고 있는 시리즈 목록을 보고 이 아이디어를 어디에 넣을지 정해라.
+
+# 아이디어 (출처: {source})
+{idea}
+
+# 시리즈 목록 (이름 | 상태 | 주제 | 규칙 앞부분)
+{series}
+
+# 판단 기준
+- 기존 시리즈의 규칙 범위에 자연스럽게 들어가면 "series" (상태가 '사용' 또는 '일시중지'인 것만). 다음 회차에 다룰 한 줄 후보로 다듬어 note에.
+- 어느 시리즈에도 안 맞고 계정에 어울리는 새 기획감이면 "new". memo는 기획 담당이 읽을 메모(무엇을, 누구에게, 어떤 구성으로, 얼마나 자주).
+- 계정 규칙(출처 확인, 투자 권유 금지, 실명·비방 금지)에 어긋나거나 너무 모호하면 "hold"와 이유.
+
+# 출력 (JSON 하나만)
+{{"action": "series|new|hold", "series": "시리즈 이름(series일 때 목록의 이름 그대로)", "note": "다음 회차 후보 한 줄",
+  "memo": "새 시리즈 메모(new일 때)", "reason": "한 줄 이유"}}"""
+
+
+# ---------------------------------------------------------------- 구조
+
+def _page(pl: Pipeline, key: str, home: str) -> tuple[str, bool]:
+    """하위 페이지 id (없으면 만듦). 새로 만들었으면 True."""
+    pid = pl.db.kv_get(f"notion_page_{key}")
+    if pid:
+        return pid, False
+    emoji, title = next((e, t) for k, e, t in PAGES if k == key)
+    pid = pl.notion._req("POST", "/pages", json={"parent": {"page_id": home}, "icon": {"type": "emoji", "emoji": emoji},
+                                                 "properties": {"title": {"title": rich(title)}}})["id"]
+    pl.db.kv_set(f"notion_page_{key}", pid)
+    return pid, True
+
+
+def _callout(text: str, emoji: str = "💬", color: str = "gray_background") -> dict:
+    return {"object": "block", "type": "callout",
+            "callout": {"rich_text": rich(text), "icon": {"type": "emoji", "emoji": emoji}, "color": color}}
+
+
+def _block(kind: str, text: str) -> dict:
+    return {"object": "block", "type": kind, kind: {"rich_text": rich(text)}}
+
+
+def _move_db(pl: Pipeline, db_id: str, page: str) -> bool:
+    db = pl.notion.database(db_id)
+    if db["parent"].get("page_id", "").replace("-", "") == page.replace("-", ""):
+        return False
+    pl.notion._req("PATCH", f"/databases/{db_id}", version=VIEWS_VERSION,
+                   json={"parent": {"type": "page_id", "page_id": page}})
+    return True
+
+
+def ensure_ideas_db(pl: Pipeline, page: str) -> str:
+    db_id = pl.db.kv_get("notion_ideas_db_id")
+    if db_id:
+        return db_id
+    db_id = pl.notion.create_db(page, "아이디어 수신함", IDEA_PROPS, icon="💡")
+    pl.db.kv_set("notion_ideas_db_id", db_id)
+    try:
+        n = pl.notion
+        ds = n.database(db_id)["data_sources"][0]["id"]
+        p = {k: v["id"] for k, v in n.data_source(ds)["properties"].items()}
+        for v in n.views(db_id):
+            n.update_view(v["id"], {"name": "최근", "sorts": [{"property": "생성", "direction": "descending"}],
+                                    "configuration": {"type": "table", "wrap_cells": True, "properties": [
+                                        {"property_id": p[k], "visible": True} for k in ("아이디어", "상태", "결과", "출처")]}})
+    except RuntimeError as e:
+        log.warning("아이디어 보기 설정 실패: %s", e)
+    return db_id
+
+
+def _posts_views(pl: Pipeline) -> list[str]:
+    """게시물 DB: '보관' 체크박스, 보관함 보기, 겹치는 보기 정리."""
+    n, db_id = pl.notion, pl.db.kv_get("notion_db_id")
+    done: list[str] = []
+    ds = n.database(db_id)["data_sources"][0]["id"]
+    props = n.data_source(ds)["properties"]
+    if "보관" not in props:
+        n.add_properties(db_id, {"보관": {"checkbox": {}}})
+        props = n.data_source(ds)["properties"]
+        done.append("게시물 DB에 '보관' 추가")
+    p = {k: v["id"] for k, v in props.items()}
+    live = {"property": "보관", "checkbox": {"equals": False}}
+    have = {v["name"]: v for v in n.views(db_id)}
+    want = {
+        "📋 전체": {"filter": live},
+        "📥 확인할 것": {"filter": {"or": [{"property": "상태", "select": {"equals": s}} for s in ("초안", "실패")]}},
+        "🖼 게시됨": {"filter": {"and": [{"property": "상태", "select": {"equals": "게시됨"}}, live]}},
+    }
+    for name, body in want.items():
+        if name in have:
+            n.update_view(have[name]["id"], body)
+    for name in ("🗂 주제별", "🗑 반려"):  # 보관함·전체와 겹친다
+        if name in have:
+            try:
+                n._req("DELETE", f"/views/{have[name]['id']}", version=VIEWS_VERSION)
+                done.append(f"보기 {name} 정리")
+            except RuntimeError as e:
+                log.warning("보기 삭제 실패 %s: %s", name, e)
+    if "🗄 보관함" not in have:
+        n.create_view({"database_id": db_id, "data_source_id": ds, "name": "🗄 보관함", "type": "table",
+                       "filter": {"property": "보관", "checkbox": {"equals": True}},
+                       "sorts": [{"property": "생성", "direction": "descending"}],
+                       "configuration": {"type": "table", "properties": [
+                           {"property_id": p[k], "visible": True} for k in ("제목", "상태", "주제", "형식", "인스타 링크")] + [
+                           {"property_id": p[k], "visible": False} for k in ("캡션", "미디어", "ID", "소스", "오류", "예약")]}})
+        done.append("보기 🗄 보관함")
+    return done
+
+
+def organize(pl: Pipeline) -> list[str]:
+    """홈을 요약 + 하위 페이지로 정리한다. 반환: 한 일 목록."""
+    n = pl.notion
+    home = pl.db.kv_get("notion_home_page_id")
+    if not home:
+        home = n.database(pl.db.kv_get("notion_db_id"))["parent"]["page_id"]
+        pl.db.kv_set("notion_home_page_id", home)
+    done: list[str] = []
+    page = n._req("GET", f"/pages/{home}")
+    if not prop_text(page["properties"], "title"):
+        n._req("PATCH", f"/pages/{home}", json={"icon": {"type": "emoji", "emoji": "🏠"},
+                                                "properties": {"title": {"title": rich("인스타그램 운영")}}})
+    # 1) 홈의 옛 안내 블록은 지우고 (Make 기록 링크는 설명서로 옮김), 요약 콜아웃을 맨 위에
+    bookmarks = []
+    summary = pl.db.kv_get("notion_home_summary_block")
+    for b in n.children(home):
+        if b["type"] in ("child_database", "child_page") or b["id"] == summary:
+            continue
+        if b["type"] == "bookmark":
+            bookmarks.append(b["bookmark"]["url"])
+        n._req("DELETE", f"/blocks/{b['id']}")
+    if not summary:
+        summary = n.append(home, [_callout("오늘 요약을 준비 중이에요.", "📌", "blue_background")])[0]["id"]
+        pl.db.kv_set("notion_home_summary_block", summary)
+        done.append("홈 요약")
+    # 2) 하위 페이지 + 소개 + 표 옮기기 (소개를 먼저 써야 표가 그 아래에 온다)
+    for key, _, title in PAGES:
+        pid, new = _page(pl, key, home)
+        if new:
+            if key == "guide":
+                n.append(pid, [_block(k, t) for k, t in GUIDE] +
+                         [{"object": "block", "type": "bookmark", "bookmark": {"url": u}} for u in bookmarks])
+            else:
+                n.append(pid, [_callout(INTRO[key])])
+            done.append(f"페이지 {title}")
+        if key == "ideas":
+            ensure_ideas_db(pl, pid)
+        db_id = pl.db.kv_get(DB_OF.get(key, ""))
+        if db_id and _move_db(pl, db_id, pid):
+            done.append(f"{title} 표 → 하위 페이지")
+    done += _posts_views(pl)
+    refresh_home(pl, force=True)
+    return done
+
+
+# ---------------------------------------------------------------- 매번 (plan 크론)
+
+def archive_old(pl: Pipeline, now: datetime) -> int:
+    """2주 지난 게시됨·반려 게시물에 '보관' 체크."""
+    db_id = pl.db.kv_get("notion_db_id")
+    before = (now - timedelta(days=ARCHIVE_DAYS)).isoformat(timespec="minutes")
+    flt = {"and": [{"property": "보관", "checkbox": {"equals": False}},
+                   {"or": [{"property": "상태", "select": {"equals": s}} for s in ("게시됨", "반려")]},
+                   {"timestamp": "created_time", "created_time": {"before": before}}]}
+    rows = pl.notion.query(db_id, flt)
+    for r in rows:
+        pl.notion.set_props(r["id"], {"보관": {"checkbox": True}})
+    if rows:
+        log.info("보관함으로 %d개", len(rows))
+    return len(rows)
+
+
+def short_title(title: str, n: int = 48) -> str:
+    """'[시리즈] [소제목] 내용' → '시리즈 · 내용' (홈 요약 한 줄용)."""
+    series = title[1:title.index("]")] if title.startswith("[") and "]" in title else ""
+    rest = title.rsplit("] ", 1)[-1]
+    out = f"{series} · {rest}" if series and rest != title else title
+    return out if len(out) <= n else out[: n - 1] + "…"
+
+
+def summary_text(now: datetime, posts: list[dict], plan_rows: list[dict], ideas: list[dict]) -> str:
+    """홈 콜아웃 글. posts: 게시물 DB 행(보관 안 된 것)."""
+    today = now.date()
+    days = "월화수목금토일"
+    up, check, failed = [], 0, 0
+    for r in posts:
+        pr = r["properties"]
+        st = prop_text(pr, "상태")
+        if st == "초안":
+            check += 1
+        elif st == "실패":
+            failed += 1
+        at = prop_text(pr, "예약")
+        if st in ("초안", "승인") and at:
+            dt = datetime.fromisoformat(at)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=now.tzinfo)
+            dt = dt.astimezone(now.tzinfo)
+            if dt.date() == today and dt >= now - timedelta(minutes=30):
+                up.append((dt, short_title(prop_text(pr, "제목"))))
+    review = sum(1 for r in plan_rows if prop_text(r["properties"], "상태") == "검토 대기")
+    plan_err = sum(1 for r in plan_rows if prop_text(r["properties"], "상태") == "오류")
+    new_ideas = sum(1 for r in ideas if prop_text(r["properties"], "상태") in ("", IDEA_NEW))
+    lines = [f"{today:%m/%d}({days[today.weekday()]}) 오늘 남은 게시"]
+    lines += [f"  {dt:%H:%M}  {t}" for dt, t in sorted(up)] or ["  (예약된 게시물 없음 — 증시는 크론이 따로 올려요)"]
+    todo = []
+    if check:
+        todo.append(f"📥 확인할 초안 {check}개")
+    if failed or plan_err:
+        todo.append(f"⚠️ 실패·오류 {failed + plan_err}개")
+    if review:
+        todo.append(f"🧭 검토 대기 시리즈 {review}개")
+    if new_ideas:
+        todo.append(f"💡 정리 중인 아이디어 {new_ideas}개")
+    lines.append("할 일: " + (" · ".join(todo) if todo else "없음 👍"))
+    return "\n".join(lines)
+
+
+def refresh_home(pl: Pipeline, plan_rows: list[dict] | None = None, force: bool = False) -> bool:
+    n, block = pl.notion, pl.db.kv_get("notion_home_summary_block")
+    if not n or not block:
+        return False
+    now = datetime.now(pl.tz)
+    posts = n.query(pl.db.kv_get("notion_db_id"), {"property": "보관", "checkbox": {"equals": False}})
+    if plan_rows is None:
+        plan_rows = n.query(pl.db.kv_get("notion_plan_db_id"))
+    ideas_db = pl.db.kv_get("notion_ideas_db_id")
+    ideas = n.query(ideas_db) if ideas_db else []
+    text = summary_text(now, posts, plan_rows, ideas)
+    digest = hashlib.sha1(text.encode()).hexdigest()
+    if not force and pl.db.kv_get("home_digest") == digest:
+        return False
+    n._req("PATCH", f"/blocks/{block}", json={"callout": {"rich_text": rich(text)}})
+    pl.db.kv_set("home_digest", digest)
+    return True
+
+
+def _series_table(plan_rows: list[dict]) -> str:
+    out = []
+    for r in plan_rows:
+        pr = r["properties"]
+        st = prop_text(pr, "상태")
+        if st in ("사용", "일시중지", "검토 대기"):
+            rules = prop_text(pr, "다듬은 규칙").split(CANDIDATES)[0].replace("\n", " ")[:160]
+            out.append(f"- {prop_text(pr, '이름')} | {st} | {prop_text(pr, '주제')} | {rules}")
+    return "\n".join(out)
+
+
+def add_candidate(rules: str, note: str) -> str:
+    """시리즈 규칙 끝 '다음 회차 후보' 목록에 한 줄 추가 (노션 글자 수 한도 안에서)."""
+    base, _, tail = rules.partition(CANDIDATES)
+    items = [x for x in tail.strip().splitlines() if x.strip()] + [f"- {note}"]
+    while items:
+        out = f"{base.rstrip()}\n\n{CANDIDATES}\n" + "\n".join(items)
+        if len(out) <= 1900:
+            return out
+        items.pop(0)  # 넘치면 오래된 후보부터 뺀다 (규칙 본문은 그대로)
+    return base[:1900]
+
+
+def process_ideas(pl: Pipeline, plan_rows: list[dict]) -> int:
+    """새 아이디어(상태 비어 있음 포함)를 하나씩 정리한다. 처리한 수."""
+    ideas_db = pl.db.kv_get("notion_ideas_db_id")
+    if not pl.notion or not ideas_db:
+        return 0
+    n, plan_id = pl.notion, pl.db.kv_get("notion_plan_db_id")
+    count = 0
+    for r in n.query(ideas_db):
+        pr = r["properties"]
+        idea = prop_text(pr, "아이디어").strip()
+        if prop_text(pr, "상태") not in ("", IDEA_NEW) or not idea:
+            continue
+        try:
+            d = parse_json(call_claude(IDEA_PROMPT.format(idea=idea, source=prop_text(pr, "출처") or "직접",
+                                                          series=_series_table(plan_rows)), pl.cfg.caption))
+        except Exception as e:  # noqa: BLE001 — 다음 크론에 다시
+            log.warning("아이디어 정리 실패: %s", e)
+            continue
+        action = d.get("action")
+        target = next((p for p in plan_rows if prop_text(p["properties"], "이름") == d.get("series")), None)
+        if action == "series" and target and d.get("note"):
+            rules = add_candidate(prop_text(target["properties"], "다듬은 규칙"), str(d["note"]))
+            n.set_props(target["id"], {"다듬은 규칙": {"rich_text": rich(rules)}})
+            target["properties"]["다듬은 규칙"] = {"type": "rich_text", "rich_text": rich(rules)}
+            result, status = f"→ '{d['series']}' 다음 회차 후보: {d['note']}", IDEA_DONE
+        elif action in ("new", "series") and (d.get("memo") or idea):
+            memo = f"{d.get('memo') or idea}\n(아이디어 수신함: {idea})"
+            n._req("POST", "/pages", json={"parent": {"database_id": plan_id}, "properties": {
+                "이름": {"title": rich(idea[:60])}, "상태": {"select": {"name": "새 요청"}},
+                "메모": {"rich_text": rich(memo[:1900])}}})
+            result, status = "→ 🧭 시리즈 기획에 새 요청으로 (검토 대기 후 '사용')", IDEA_DONE
+        else:
+            result, status = f"보류: {d.get('reason') or '판단 못 함'}", IDEA_HOLD
+        n.set_props(r["id"], {"상태": {"select": {"name": status}}, "결과": {"rich_text": rich(result[:1900])},
+                              **({} if prop_text(pr, "출처") else {"출처": {"select": {"name": "직접"}}})})
+        log.info("아이디어 정리: %s %s", idea[:30], result[:60])
+        count += 1
+    return count

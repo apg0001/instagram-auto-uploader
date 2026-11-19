@@ -41,6 +41,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("refresh-token", help="인스타 장기 토큰 갱신")
     sub.add_parser("notion-dashboard", help="노션 게시물 DB에 주제·보기를 만들고 콘텐츠 기획 DB를 붙인다")
     sub.add_parser("plan", help="노션 콘텐츠 기획 처리: 새 요청 다듬기 + 때가 된 정기 초안 생성")
+    sub.add_parser("engagement", help="최근 게시물 좋아요·댓글 수를 노션에, 댓글 속 아이디어를 아이디어 수신함에")
     n = sub.add_parser("notion-setup", help="노션 페이지 아래에 게시물 DB 생성")
     n.add_argument("parent", help="통합을 연결한 노션 페이지 URL 또는 id")
     args = ap.parse_args(argv)
@@ -105,6 +106,9 @@ def main(argv: list[str] | None = None) -> int:
     elif args.cmd == "plan":
         from . import planner
         planner.run(pl)
+    elif args.cmd == "engagement":
+        from . import engagement
+        print(engagement.collect(pl) or "꺼져 있음 (config engagement.enabled)")
     elif args.cmd == "notion-setup":
         print("노션 DB 생성:", pl.setup_notion(args.parent))
     return 0

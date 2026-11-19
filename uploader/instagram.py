@@ -83,6 +83,13 @@ class Instagram:
     def permalink(self, media_id: str) -> str | None:
         return self._call("GET", media_id, fields="permalink").get("permalink")
 
+    def engagement(self, media_id: str) -> dict[str, Any]:
+        """좋아요·댓글 수와 댓글 글 (쓴 사람 이름은 받지 않음)."""
+        m = self._call("GET", media_id, fields="like_count,comments_count")
+        c = self._call("GET", f"{media_id}/comments", fields="id,text", limit=50)
+        return {"id": media_id, "like_count": m.get("like_count"), "comments_count": m.get("comments_count"),
+                "comments": c.get("data") or []}
+
     def publishing_limit(self) -> dict:
         return self._call("GET", f"{self.user_id}/content_publishing_limit", fields="quota_usage,config")
 

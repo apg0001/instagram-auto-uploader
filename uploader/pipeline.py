@@ -446,7 +446,7 @@ class Pipeline:
         theme = topic_theme or themes.topic_of(source)
         pid, work = self._new_id(source, "carousel")
         content, media = custom.make_topic(topic, self.cfg.caption, work / "out", design, theme=themes.css(theme),
-                                           kicker=title)
+                                           kicker=title, topic_key=theme)
         kind = "CAROUSEL" if len(media) > 1 else "IMAGE"
         head = f"[{title}]" if title else "[주제]"
         return self._finalize(pid, source, kind, f"{head} {content.get('title', topic[:40])}", content["caption"], media,

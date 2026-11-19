@@ -10,8 +10,8 @@
 시리즈가 이미 다룬 게시물 제목은 원고 지침에 함께 넘겨 주제가 겹치지 않게 한다.
 메모를 고쳐 다시 다듬고 싶으면 상태를 '새 요청'으로 되돌리면 된다.
 
-setup_dashboard 는 게시물 DB에 '주제' 속성과 보기(확인할 것·예약 달력·게시됨·주제별·반려)를 만들고,
-같은 페이지에 기획 DB와 사용법을 붙인다. 여러 번 실행해도 이미 있는 것은 건너뛴다.
+setup_dashboard 는 게시물 DB에 '주제' 속성과 보기를 만들고 기획 DB·타임테이블을 붙인 뒤,
+workspace.organize 로 홈(오늘 요약) 아래 하위 페이지에 표를 하나씩 옮긴다. 여러 번 실행해도 안전하다.
 """
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
-from . import themes, timetable
+from . import themes, timetable, workspace
 from .caption import call_claude, parse_json
 from .notion import TOPIC_OPTIONS, prop_text, rich
 
@@ -156,8 +156,8 @@ def _view_specs(p: dict[str, str]) -> list[dict]:
     """게시물 DB 보기. p: 속성 이름 → id."""
     status = "상태"
     return [
-        {"name": "📥 확인할 것", "type": "table",
-         "filter": {"or": [{"property": status, "select": {"equals": s}} for s in ("초안", "승인", "실패")]},
+        {"name": "📥 확인할 것", "type": "table",  # 자동 승인이라 사람이 볼 것은 초안·실패뿐
+         "filter": {"or": [{"property": status, "select": {"equals": s}} for s in ("초안", "실패")]},
          "sorts": [{"property": "생성", "direction": "descending"}],
          "configuration": {"type": "table", "wrap_cells": True, "properties": [
              {"property_id": p[k], "visible": True} for k in ("제목", "상태", "주제", "형식", "예약", "오류")] + [
@@ -172,13 +172,6 @@ def _view_specs(p: dict[str, str]) -> list[dict]:
          "sorts": [{"property": "생성", "direction": "descending"}],
          "configuration": {"type": "gallery", "cover": {"type": "property", "property_id": p["미디어"]},
                            "cover_size": "medium", "cover_aspect": "cover"}},
-        {"name": "🗂 주제별", "type": "board",
-         "filter": {"property": status, "select": {"does_not_equal": "반려"}},
-         "configuration": {"type": "board", "group_by": {"type": "select", "property_id": p["주제"],
-                                                          "sort": {"type": "manual"}, "hide_empty_groups": True},
-                           "cover": {"type": "property", "property_id": p["미디어"]}, "cover_size": "small"}},
-        {"name": "🗑 반려", "type": "table", "filter": {"property": status, "select": {"equals": "반려"}},
-         "sorts": [{"property": "생성", "direction": "descending"}]},
     ]
 
 
@@ -253,6 +246,9 @@ def setup_dashboard(pl: Pipeline) -> list[str]:
         timetable.ensure_db(pl, parent)
         done.append("주간 타임테이블 표")
     timetable.refresh(pl, n.query(plan_id), force=True)
+
+    # 5) 홈 = 오늘 요약 + 하위 페이지 (게시물·시리즈 기획·아이디어 수신함·타임테이블·운영 설명서)
+    done += workspace.organize(pl)
     return done
 
 
@@ -420,3 +416,11 @@ def run(pl: Pipeline) -> None:
         timetable.refresh(pl, rows)
     except Exception:  # noqa: BLE001 — 표 갱신 실패가 생성을 막지 않게
         log.exception("타임테이블 갱신 실패")
+    try:  # 아이디어 수신함 정리 → 2주 지난 게시물 보관 → 홈 요약
+        if workspace.process_ideas(pl, rows):
+            rows = pl.notion.query(plan_id)
+        if pl.db.kv_get("notion_home_summary_block"):
+            workspace.archive_old(pl, now)
+            workspace.refresh_home(pl, rows)
+    except Exception:  # noqa: BLE001
+        log.exception("작업 공간 갱신 실패")
