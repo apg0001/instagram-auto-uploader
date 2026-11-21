@@ -57,3 +57,9 @@ def test_market_expiry():
     assert market_expiry("premarket", now) == dt.datetime(2026, 11, 17, 9, 0, tzinfo=KST).timestamp()
     close = dt.datetime(2026, 11, 17, 16, 10, tzinfo=KST)
     assert market_expiry("close", close) == dt.datetime(2026, 11, 18, 8, 30, tzinfo=KST).timestamp()
+
+
+def test_index_names_are_not_numbers():
+    snap = {"indices": [{"name": "S&P 500", "close": 6000.12}]}
+    assert stray_numbers("S&P 500 지수가 6,000.12로 마감, 나스닥 100도 강세", snap) == []
+    assert stray_numbers("S&P 500이 7,777로", snap) == ["7,777"]
