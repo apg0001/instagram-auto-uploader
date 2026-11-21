@@ -66,11 +66,25 @@ class Pipeline:
         prefixes = self.cfg.raw.get("auto_approve") or []
         return "*" in prefixes or any(source == a or source.startswith((a + ":", a + "-")) for a in prefixes)
 
+    def record_failure(self, source: str, err: Exception) -> None:
+        """자동 생성 실패를 남긴다 (최근 20개). workspace 홈 요약이 24시간 안의 것을 보여 준다."""
+        try:
+            items = json.loads(self.db.kv_get("generate_failures") or "[]")
+        except ValueError:
+            items = []
+        items.append({"at": time.time(), "source": source, "error": f"{type(err).__name__}: {err}"[:300]})
+        self.db.kv_set("generate_failures", json.dumps(items[-20:], ensure_ascii=False))
+        try:
+            from . import workspace
+            workspace.refresh_home(self)
+        except Exception:  # noqa: BLE001
+            log.exception("홈 요약 갱신 실패")
+
     def generate(self, source: str = "lab-wars", kind: str | None = None, stage: str | None = None,
                  at: str | None = None) -> Post | None:
         if source.startswith("market"):
             report = source.split(":", 1)[1] if ":" in source else "close"
-            return self.generate_market(report)
+            return self.generate_market(report, scheduled_at=parse_when(at, self.tz))
         when = parse_when(at, self.tz)
         if source == "agent-office":
             return self.generate_repo(source, kind, when)
@@ -423,7 +437,8 @@ class Pipeline:
         shutil.rmtree(work / "capture" / "raw", ignore_errors=True)
         return post
 
-    def generate_market(self, report: str, today=None) -> Post | None:
+    def generate_market(self, report: str, today=None, scheduled_at: float | None = None) -> Post | None:
+        """scheduled_at: 놓친 리포트를 나중에 다시 만들 때 게시 시각 (`generate --source market:weekly --at …`)."""
         from .cards.render import render
         from .market import analysis, data
         from .market import report as market_report
@@ -451,7 +466,8 @@ class Pipeline:
         expires = market_expiry(report, now)
         title = f"[증시] {analysis.REPORT_KO[report]} {today:%m/%d} {ana['headline']}"
         return self._finalize(pid, source, "CAROUSEL", title, ana["caption"], media, ["image"] * len(media),
-                              meta={"check": "market", "report": report, "expires_at": expires})
+                              meta={"check": "market", "report": report, "expires_at": max(expires, (scheduled_at or 0) + 3600)},
+                              scheduled_at=scheduled_at)
 
     def generate_topic(self, topic: str, design: str = "template", source: str = "topic",
                        topic_theme: str | None = None, title: str | None = None,

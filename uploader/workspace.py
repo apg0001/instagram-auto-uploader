@@ -342,7 +342,29 @@ def short_title(title: str, n: int = 48) -> str:
     return out if len(out) <= n else out[: n - 1] + "…"
 
 
-def summary_text(now: datetime, posts: list[dict], plan_rows: list[dict], ideas: list[dict]) -> str:
+SOURCE_KO = {"market:premarket": "장 전 브리핑", "market:close": "장 마감 시황", "market:weekly": "주간 증시 리포트",
+             "market:monthly": "월간 증시 리포트", "github-trending": "깃허브 Top 5", "whatif": "만약에 릴스"}
+
+
+def recent_failures(raw: str | None, now: datetime, hours: int = 24) -> list[str]:
+    """kv generate_failures → 최근 실패 한 줄씩 ('11/21 09:00 주간 증시 리포트: 이유')."""
+    import json
+
+    try:
+        items = json.loads(raw or "[]")
+    except ValueError:
+        return []
+    out = []
+    for it in items:
+        at = datetime.fromtimestamp(float(it.get("at", 0)), now.tzinfo)
+        if now - at <= timedelta(hours=hours):
+            name = SOURCE_KO.get(it.get("source", ""), it.get("source", ""))
+            out.append(f"{at:%m/%d %H:%M} {name}: {str(it.get('error', ''))[:80]}")
+    return out
+
+
+def summary_text(now: datetime, posts: list[dict], plan_rows: list[dict], ideas: list[dict],
+                 failures: list[str] | None = None) -> str:
     """홈 콜아웃 글. posts: 게시물 DB 행(보관 안 된 것)."""
     today = now.date()
     days = "월화수목금토일"
@@ -377,6 +399,8 @@ def summary_text(now: datetime, posts: list[dict], plan_rows: list[dict], ideas:
     if new_ideas:
         todo.append(f"💡 정리 중인 아이디어 {new_ideas}개")
     lines.append("할 일: " + (" · ".join(todo) if todo else "없음 👍"))
+    for f in failures or []:
+        lines.append(f"⚠️ 생성 실패 {f}")
     return "\n".join(lines)
 
 
@@ -459,7 +483,7 @@ def refresh_home(pl: Pipeline, plan_rows: list[dict] | None = None, force: bool 
         plan_rows = n.query(pl.db.kv_get("notion_plan_db_id"))
     ideas_db = pl.db.kv_get("notion_ideas_db_id")
     ideas = n.query(ideas_db) if ideas_db else []
-    text = summary_text(now, posts, plan_rows, ideas)
+    text = summary_text(now, posts, plan_rows, ideas, recent_failures(pl.db.kv_get("generate_failures"), now))
     week = week_rows(now, posts, plan_rows)
     digest = hashlib.sha1((text + repr([(f"{t:%m%d%H%M}", w, s) for t, w, s in week])).encode()).hexdigest()
     if not force and pl.db.kv_get("home_digest") == digest:

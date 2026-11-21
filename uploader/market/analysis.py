@@ -108,8 +108,32 @@ def _snap_numbers(obj: Any, out: set[float]) -> set[float]:
     return out
 
 
+def _snap_names(obj: Any, out: set[str]) -> set[str]:
+    """스냅샷의 이름들 (예: 'S&P 500', '코스피 200') — 이름 속 숫자는 수치가 아니다."""
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            if k in ("name", "name_ko", "label") and isinstance(v, str):
+                out.add(v)
+            else:
+                _snap_names(v, out)
+    elif isinstance(obj, (list, tuple)):
+        for v in obj:
+            _snap_names(v, out)
+    return out
+
+
+# 데이터에 없어도 글에 자주 나오는 지수·지표 이름
+INDEX_NAMES = ["S&P 500", "S&P500", "S&P", "나스닥 100", "나스닥100", "NASDAQ 100", "코스피 200", "코스피200", "KOSPI 200",
+               "코스닥 150", "코스닥150", "러셀 2000", "Russell 2000", "닛케이 225", "Nikkei 225", "FTSE 100", "DAX 40",
+               "Euro Stoxx 50", "유로스톡스 50", "다우 30"]
+
+
 def stray_numbers(text: str, snap: dict[str, Any]) -> list[str]:
-    """글에 나온 숫자 중 스냅샷에 없는 것. 100 미만 정수(날짜·개수·순위)는 검사하지 않는다."""
+    """글에 나온 숫자 중 스냅샷에 없는 것. 100 미만 정수(날짜·개수·순위)는 검사하지 않는다.
+    종목·지수 이름 속 숫자(S&P 500의 500 등)는 빼고 본다."""
+    for name in sorted(_snap_names(snap, set()) | set(INDEX_NAMES), key=len, reverse=True):
+        if re.search(r"\d", name):
+            text = text.replace(name, " ")
     known = _snap_numbers(snap, set())
     stray = []
     for tok in NUM.findall(text):
