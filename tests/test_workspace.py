@@ -86,3 +86,13 @@ def test_week_rows_mix_posts_plan_and_market():
     assert [r[0] for r in rows] == sorted(r[0] for r in rows)
     table = workspace.week_table(rows)
     assert table["table"]["table_width"] == 4 and len(table["table"]["children"]) == len(rows) + 1
+
+
+def test_recent_failures_shown_in_summary():
+    import json
+    now = datetime(2026, 11, 21, 10, 0, tzinfo=KST)
+    raw = json.dumps([{"at": now.timestamp() - 3600, "source": "market:weekly", "error": "CaptionError: 숫자"},
+                      {"at": now.timestamp() - 3 * 86400, "source": "market:close", "error": "옛날"}])
+    fails = workspace.recent_failures(raw, now)
+    assert fails == ["11/21 09:00 주간 증시 리포트: CaptionError: 숫자"]
+    assert "⚠️ 생성 실패 11/21 09:00 주간 증시 리포트" in workspace.summary_text(now, [], [], [], fails)

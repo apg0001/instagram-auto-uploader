@@ -78,7 +78,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.cmd in ("generate", "topic", "post"):
         if args.cmd == "generate":
-            post = pl.generate(args.source, args.kind, args.stage, args.at)
+            try:
+                post = pl.generate(args.source, args.kind, args.stage, args.at)
+            except Exception as e:
+                pl.record_failure(args.source, e)  # 노션 홈 요약에 '⚠️ 생성 실패'로 보이게
+                raise
         elif args.cmd == "topic":
             post = pl.generate_topic(args.topic, args.design)
         else:

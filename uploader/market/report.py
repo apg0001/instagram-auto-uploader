@@ -102,10 +102,13 @@ def slides(snap: dict[str, Any], ana: dict[str, Any]) -> list[tuple[str, dict[st
     else:  # weekly / monthly
         word = "이번 주" if rep == "weekly" else "이번 달"
         start = dt.date.fromisoformat(snap["period_start"])
+        # 끝 날짜는 만든 날이 아니라 마지막 거래일 (주말에 만들어도 '11/16 – 11/20')
+        last = snap["kospi_daily"][-1][0] if snap.get("kospi_daily") else None
+        end = min(d, dt.date.fromisoformat(str(last)[:10])) if last else d
         idx = {q["name"]: q for q in snap["indices"]}
         boards = [{"name": n, "value": f"{idx[n]['price']:,.2f}", "pct": idx[n]["pct"]} for n in ("코스피", "코스닥", "나스닥") if n in idx]
         kospi_pct = idx.get("코스피", {"pct": 0})["pct"]
-        out.append(("market_cover", {**c, "kicker": f"{start.month}/{start.day} – {d.month}/{d.day} {REPORT_KO[rep]}",
+        out.append(("market_cover", {**c, "kicker": f"{start.month}/{start.day} – {end.month}/{end.day} {REPORT_KO[rep]}",
                                      "headline": ana["headline"], "day_tone": _tone(kospi_pct), "summary": ana["summary"],
                                      "boards": boards, "spark": [v for _, v in snap["kospi_daily"]],
                                      "spark_label": f"코스피 일별 종가 (최근 {len(snap['kospi_daily'])}거래일)"}))
