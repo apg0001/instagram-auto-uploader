@@ -12,6 +12,16 @@ FOOTNOTE = "데이터: 네이버 증권, Yahoo Finance  |  정보 제공 목적,
 WEEKDAY = "월화수목금토일"
 
 
+PHOTO_REPORTS = ("weekly", "monthly")
+# 주간·월간 표지 사진 검색어 — 매주 돌아가며 (같은 사진이 이어지지 않게)
+PHOTO_QUERIES = ("stock market chart", "trading screen", "financial district night", "candlestick chart",
+                 "city skyline night", "stock ticker screen")
+
+
+def photo_query(day: dt.date) -> str:
+    return PHOTO_QUERIES[day.isocalendar()[1] % len(PHOTO_QUERIES)]
+
+
 def _date_label(snap: dict) -> str:
     d = dt.date.fromisoformat(snap["date"])
     return f"{d.year}. {d.month}. {d.day}. ({WEEKDAY[d.weekday()]})"

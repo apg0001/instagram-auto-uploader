@@ -50,7 +50,7 @@
   <div class="meta"><span><b>{{ brand }}</b>  {{ report_name }}</span><span>{{ date_label }}</span></div>
   <main class="fit">{% block content %}{% endblock %}</main>
   <div class="foot">
-    <span>{{ footnote }}</span>
+    <span>{% if photo_credit %}{{ photo_credit }}{% if footnote %} · {% endif %}{% endif %}{{ footnote }}</span>
     <span>{{ page_no }} / {{ page_total }}</span>
   </div>
 </div>
