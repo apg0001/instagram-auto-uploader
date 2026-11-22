@@ -462,10 +462,19 @@ class Pipeline:
         (work / "snapshot.json").write_text(json.dumps(snap, ensure_ascii=False, indent=1), encoding="utf-8")
         ana = analysis.analyze(snap, self.cfg.caption)
         (work / "analysis.json").write_text(json.dumps(ana, ensure_ascii=False, indent=1), encoding="utf-8")
-        media = render(market_report.slides(snap, ana), work / "out", theme=themes.css("market"))
+        slides = market_report.slides(snap, ana)
+        caption = ana["caption"]
+        if report in market_report.PHOTO_REPORTS:  # 주간·월간 표지만 사진 배경 (매일 리포트는 그대로)
+            from . import photos
+            q = market_report.photo_query(today)
+            photo = photos.find(q, work, themes.get("market")["photo"], topic=ana["headline"], cfg=self.cfg.caption)
+            if photo:
+                slides[0][1].update(photo=photo.path.resolve().as_uri(), photo_credit=photo.credit)
+                caption = photos.add_credit(caption, photo)
+        media = render(slides, work / "out", theme=themes.css("market"))
         expires = market_expiry(report, now)
         title = f"[증시] {analysis.REPORT_KO[report]} {today:%m/%d} {ana['headline']}"
-        return self._finalize(pid, source, "CAROUSEL", title, ana["caption"], media, ["image"] * len(media),
+        return self._finalize(pid, source, "CAROUSEL", title, caption, media, ["image"] * len(media),
                               meta={"check": "market", "report": report, "expires_at": max(expires, (scheduled_at or 0) + 3600)},
                               scheduled_at=scheduled_at)
 
@@ -519,7 +528,8 @@ class Pipeline:
         self.db.save(post)
         if self.notion and post.notion_page_id:
             self.notion.update(post.notion_page_id, status=status, permalink=post.permalink,
-                               error=error if error is not None else "")
+                               error=error if error is not None else "",
+                               posted=post.decided_at if status == PUBLISHED else None)
 
     def pull_decisions(self) -> None:
         """노션에서 사람이 바꾼 상태·캡션을 가져온다."""

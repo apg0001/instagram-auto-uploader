@@ -39,11 +39,10 @@
   .teaser div { background: rgba(10,12,20,.55); backdrop-filter: blur(6px); }
   .teaser span { color: #fff; }
   .teaser b { box-shadow: 0 0 0 2px rgba(255,255,255,.45); }
-  .credit { position: absolute; right: 80px; bottom: 104px; font-size: 19px; color: rgba(255,255,255,.7); z-index: 1; }
   {% endif %}
 {% endblock %}
 {% block content %}
-  {% if photo %}<div class="photo"></div><div class="credit">{{ photo_credit }}</div>{% endif %}
+  {% if photo %}<div class="photo"></div>{% endif %}
   {% if kind == "cover" %}
     {% if kicker %}<div class="kicker">{{ kicker }}</div>{% endif %}
     <div class="cover-title">{{ title }}</div>
