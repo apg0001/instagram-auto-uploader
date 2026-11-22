@@ -260,8 +260,9 @@ def make_topic(topic: str, cfg: dict[str, Any], out_dir: Path, design: str = "te
     art = illustrate(content, cfg, theme)
     log.info("일러스트 %d/%d장", sum(1 for a in art if a), len(content["slides"]))
     (out_dir.parent / "art.json").write_text(json.dumps(art, ensure_ascii=False), encoding="utf-8")  # 다시 그릴 때 재사용
-    from . import photos
-    photo = photos.find(content.get("photo"), out_dir.parent)
+    from . import photos, themes
+    colors = themes.get(topic_key)["photo"] if topic_key else None
+    photo = photos.find(content.get("photo"), out_dir.parent, colors, topic=content.get("title") or topic, cfg=cfg)
     if photo:
         log.info("표지 사진: %s (%s)", content["photo"], photo.credit)
         content["caption"] = photos.add_credit(content["caption"], photo)
