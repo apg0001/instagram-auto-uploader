@@ -159,13 +159,28 @@ def _posts_views(pl: Pipeline) -> list[str]:
         n.add_properties(db_id, {"보관": {"checkbox": {}}})
         props = n.data_source(ds)["properties"]
         done.append("게시물 DB에 '보관' 추가")
+    if "업로드" not in props:  # 인스타에 실제로 올라간 시각 — 이미 올라간 것도 채운다
+        n.add_properties(db_id, {"업로드": {"date": {}}})
+        props = n.data_source(ds)["properties"]
+        filled = 0
+        for post in pl.db.by_status("게시됨"):
+            if post.notion_page_id and post.decided_at:
+                n.update(post.notion_page_id, posted=post.decided_at)
+                filled += 1
+        done.append(f"게시물 DB에 '업로드' 추가 ({filled}개 채움)")
     p = {k: v["id"] for k, v in props.items()}
     live = {"property": "보관", "checkbox": {"equals": False}}
     have = {v["name"]: v for v in n.views(db_id)}
     want = {
-        "📋 전체": {"filter": live},
+        "📋 전체": {"filter": live, "configuration": {"type": "table", "wrap_cells": True, "properties": [
+            {"property_id": p[k], "visible": True} for k in ("제목", "상태", "주제", "형식", "예약", "업로드", "인스타 링크")] + [
+            {"property_id": p[k], "visible": False} for k in ("캡션", "미디어", "ID", "소스", "오류", "보관") if k in p]}},
         "📥 확인할 것": {"filter": {"or": [{"property": "상태", "select": {"equals": s}} for s in ("초안", "실패")]}},
-        "🖼 게시됨": {"filter": {"and": [{"property": "상태", "select": {"equals": "게시됨"}}, live]}},
+        "🖼 게시됨": {"filter": {"and": [{"property": "상태", "select": {"equals": "게시됨"}}, live]},
+                    "sorts": [{"property": "업로드", "direction": "descending"}],
+                    "configuration": {"type": "gallery", "cover": {"type": "property", "property_id": p["미디어"]},
+                                      "cover_size": "medium", "cover_aspect": "cover", "properties": [
+                                          {"property_id": p[k], "visible": True} for k in ("제목", "업로드", "형식")]}},
     }
     for name, body in want.items():
         if name in have:

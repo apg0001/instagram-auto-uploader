@@ -16,8 +16,18 @@
   .chart { margin-top: 34px; }
   .chart .lbl { font-size: 24px; color: var(--muted); font-weight: 500; margin-bottom: 8px; }
   .summary { margin-top: 34px; font-size: 31px; line-height: 1.55; font-weight: 500; word-break: keep-all; max-width: 900px; }
+  {% if photo %}
+  /* 주간·월간 사진 표지: 어두운 사진 위에서 읽히게 흰 글씨, 상승·하락 색은 밝게 */
+  :root { --ink: #FFFFFF; --muted: rgba(255,255,255,.78); --rule: rgba(255,255,255,.28); --up: #FF6B5E; --down: #6FA4FF; }
+  body.day-up, body.day-down { background: #0B0D14; }
+  .photo { position: absolute; inset: -20px; z-index: -1; background: url("{{ photo }}") center / cover no-repeat; filter: blur(4px); }
+  .photo::after { content: ""; position: absolute; inset: 0;
+    background: linear-gradient(180deg, rgba(8,10,16,.70) 0%, rgba(8,10,16,.66) 40%, rgba(8,10,16,.80) 70%, rgba(8,10,16,.92) 100%); }
+  .kicker, .headline, .cell, .summary { text-shadow: 0 2px 16px rgba(0,0,0,.5); }
+  {% endif %}
 {% endblock %}
 {% block content %}
+  {% if photo %}<div class="photo"></div>{% endif %}
   <div class="kicker">{{ kicker }}</div>
   <div class="headline">{{ headline }}</div>
   <div class="board">

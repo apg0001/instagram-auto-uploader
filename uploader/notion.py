@@ -73,6 +73,7 @@ class Notion:
                 "캡션": {"rich_text": {}},
                 "미디어": {"files": {}},
                 "예약": {"date": {}},
+                "업로드": {"date": {}},
                 "인스타 링크": {"url": {}},
                 "오류": {"rich_text": {}},
                 "ID": {"rich_text": {}},
@@ -121,8 +122,10 @@ class Notion:
         }
 
     def update(self, page_id: str, *, status: str | None = None, permalink: str | None = None,
-               error: str | None = None, scheduled: str | None = None) -> None:
+               error: str | None = None, scheduled: str | None = None, posted: float | None = None) -> None:
         props: dict[str, Any] = {}
+        if posted:  # 인스타에 실제로 올라간 시각
+            props["업로드"] = {"date": {"start": iso_kst(posted)}}
         if scheduled:
             props["예약"] = {"date": {"start": scheduled}}
         if status:
