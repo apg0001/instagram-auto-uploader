@@ -181,13 +181,27 @@ def _chips(d: ImageDraw.ImageDraw, items: list[tuple[str, bool]], y: int, t: dic
     return y + size + 22
 
 
-def scene_intro(t: dict, period: str, out: Path) -> Path:
+def week_label(day: date) -> str:
+    """집계 기간(day-6 ~ day)이 몇 월 몇 주차인지. 목요일이 속한 달 기준 (보통 쓰는 주차 셈)."""
+    start = day - timedelta(days=6)
+    thu = start - timedelta(days=start.weekday()) + timedelta(days=3)
+    return f"{thu.month}월 {(thu.day - 1) // 7 + 1}주차"
+
+
+def period_dates(day: date) -> str:
+    start = day - timedelta(days=6)
+    return f"{start:%Y.%m.%d} – {day:%m.%d}"
+
+
+def scene_intro(t: dict, day: date, out: Path) -> Path:
     img, d = _canvas(t)
     chip(d, t["label"], W // 2, 230, 36, color=t["accent"])
     y = text_block(d, "이번 주 깃허브\n인기 레포", font(110), 340, t["ink"], 980, W, 1.25)
     y = _center(d, "TOP 5", y + 10, font(260), t["accent"])
-    y = text_block(d, "별이 가장 많이 늘어난 오픈소스", font(48, bold=False), y + 70, t["sub"], 960, W)
-    text_block(d, period, font(40, bold=False), y + 10, t["sub"], 960, W)
+    y = text_block(d, week_label(day), font(76), y + 60, t["ink"], 960, W)
+    y = text_block(d, period_dates(day), font(46, bold=False), y + 14, t["sub"], 960, W)
+    y = text_block(d, "별이 가장 많이 늘어난 오픈소스", font(48, bold=False), y + 60, t["sub"], 960, W)
+    text_block(d, "GitHub Trending 주간", font(40, bold=False), y + 10, t["sub"], 960, W)
     img.save(out, "JPEG", quality=92)
     return out
 
@@ -339,7 +353,7 @@ def assemble(scenes: list[Scene], out: Path, work: Path, seed: int) -> Path:
 def carousel_slides(picks: list[Pick], trend: str, period: str, day: date) -> list[tuple[str, dict[str, Any]]]:
     c = {"brand": "깃허브 인기 레포", "report_name": "주간 Top 5", "date_label": f"{day:%Y.%m.%d}",
          "footnote": "GitHub Trending 주간 · 이번 주 별 증가순"}
-    out = [("github", {**c, "kind": "cover", "period": period,
+    out = [("github", {**c, "kind": "cover", "week": week_label(day), "dates": period_dates(day),
                        "teaser": [pk.repo.name.split("/")[1] for pk in picks]})]
     for rank, pk in enumerate(picks, 1):
         owner, _, name = pk.repo.name.partition("/")
@@ -386,7 +400,7 @@ def build(repos: list[Repo], prev: dict[str, Repo], readmes: dict[str, str], met
              for r, info in pick(repos, script)]
     period = f"{day - timedelta(days=6):%m.%d} ~ {day:%m.%d} · GitHub Trending 주간"
 
-    cover = scene_intro(t, period, out_dir / "cover.jpg")
+    cover = scene_intro(t, day, out_dir / "cover.jpg")
     scenes = [Scene([cover], script.get("intro_say") or "이번 주 깃허브에서 별이 가장 많이 늘어난 레포 다섯 개, 5위부터 볼게요.")]
     desc = ["표지: 이번 주 깃허브 인기 레포 TOP 5"]
     for rank in range(TOP, 0, -1):
