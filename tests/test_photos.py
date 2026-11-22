@@ -38,3 +38,35 @@ def test_find_without_key_or_query(monkeypatch, tmp_path):
     assert photos.find("server room", tmp_path) is None
     monkeypatch.setenv("PIXABAY_API_KEY", "k")
     assert photos.find(None, tmp_path) is None
+
+
+def test_relevant_needs_query_word_in_tags():
+    assert photos.relevant(hit("stock market, finance"), "stock market chart")
+    assert not photos.relevant(hit("machine, tractor"), "stock market chart")
+
+
+def test_search_puts_theme_colors_first(monkeypatch):
+    calls = []
+
+    class R:
+        def __init__(self, hits):
+            self.hits = hits
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"hits": self.hits}
+
+    def fake_get(url, params, timeout):
+        color, orient = params.get("colors"), params["orientation"]
+        calls.append((color, orient))
+        base = 100 if color else 200
+        hits = [{**hit("server room"), "id": base + j} for j in range(2)] if orient == "vertical" else []
+        hits.append({**hit("tractor"), "id": base + 9})  # 검색어와 상관없는 사진은 빠진다
+        return R(hits)
+
+    monkeypatch.setattr(photos.requests, "get", fake_get)
+    got = photos.search("server room", "k", "blue,lilac", n=3)
+    assert [h["id"] for h in got] == [100, 101, 200]
+    assert calls == [("blue,lilac", "vertical"), ("blue,lilac", "horizontal"), (None, "vertical")]
