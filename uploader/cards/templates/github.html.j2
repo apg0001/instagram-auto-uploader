@@ -22,7 +22,9 @@
   .big { margin-top: 60px; font-size: 92px; font-weight: 900; line-height: 1.12; letter-spacing: -0.04em; word-break: keep-all; }
   .top5 { font-size: 200px; font-weight: 900; color: var(--accent); letter-spacing: -0.05em; line-height: 1.1; }
   .sub { margin-top: 20px; font-size: 32px; color: var(--muted); font-weight: 600; word-break: keep-all; }
-  .teaser { margin-top: 44px; display: flex; flex-direction: column; gap: 12px; }
+  .week { margin-top: 14px; font-size: 64px; font-weight: 900; letter-spacing: -0.03em; }
+  .dates { margin-top: 6px; font-size: 34px; color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .teaser { margin-top: 56px; display: flex; flex-direction: column; gap: 12px; }
   .teaser div { font-size: 30px; font-weight: 700; } .teaser b { color: var(--accent); margin-right: 14px; }
   .bars { margin-top: 40px; display: flex; flex-direction: column; gap: 26px; }
   .bars .n { font-size: 28px; font-weight: 800; } .bars .n small { font-weight: 500; color: var(--muted); font-size: 22px; margin-left: 8px; }
@@ -36,7 +38,8 @@
 {% if kind == "cover" %}
   <div class="big">이번 주 깃허브<br>인기 레포</div>
   <div class="top5">TOP 5</div>
-  <div class="sub">{{ period }}</div>
+  <div class="week">{{ week }}</div>
+  <div class="dates">{{ dates }} · GitHub Trending 주간</div>
   <div class="teaser">{% for t in teaser %}<div><b>{{ loop.index }}</b>{{ t }}</div>{% endfor %}</div>
 {% elif kind == "repo" %}
   <div class="rank">{{ rank }}위</div>
