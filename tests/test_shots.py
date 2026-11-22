@@ -30,3 +30,13 @@ def test_insert_skips_failed_and_respects_ten(monkeypatch, tmp_path):
     assert out == media
     full = [Path(f"{i}.jpg") for i in range(10)]
     assert shots.insert({"shots": [{"url": "https://a.dev"}]}, full, tmp_path, "tech") == full
+
+
+def test_blocked_pages_are_rejected(tmp_path):
+    assert shots.blocked("Just a moment...", "x" * 500)
+    assert shots.blocked("OpenAI", "사람인지 확인하십시오 " + "x" * 500)
+    assert shots.blocked("Docs", "로딩 중")  # 본문 너무 적음
+    assert shots.blocked("Claude Code Docs", "Connect Claude Code to tools via MCP. " * 20) is None
+    from PIL import Image
+    Image.new("RGB", (540, 800), "white").save(tmp_path / "w.png")
+    assert shots.blank(tmp_path / "w.png")
