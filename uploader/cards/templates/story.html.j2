@@ -32,7 +32,9 @@
   body::before, body::after { display: none; }
   .photo { position: absolute; inset: 0; z-index: -1; background: url("{{ photo }}") center / cover no-repeat; }
   .photo::after { content: ""; position: absolute; inset: 0;
-    background: linear-gradient(180deg, rgba(8,10,16,.62) 0%, rgba(8,10,16,.50) 38%, rgba(8,10,16,.70) 70%, rgba(8,10,16,.88) 100%); }
+    /* 아래로 갈수록 주제 색을 섞어, 사진 색이 조금 달라도 주제 색으로 묶여 보이게 */
+    background: linear-gradient(180deg, rgba(8,10,16,.62) 0%, rgba(8,10,16,.50) 38%,
+      color-mix(in srgb, var(--accent) 22%, rgba(8,10,16,.72)) 70%, color-mix(in srgb, var(--accent) 34%, rgba(8,10,16,.9)) 100%); }
   .cover-title, .cover-sub, .meta { text-shadow: 0 2px 18px rgba(0,0,0,.55); }
   .teaser div { background: rgba(10,12,20,.55); backdrop-filter: blur(6px); }
   .teaser span { color: #fff; }
