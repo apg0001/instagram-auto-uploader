@@ -36,6 +36,9 @@ CONTENT_PROMPT = """너는 한국어 인스타그램 카드뉴스 에디터다. 
    로그인 없이 열리는 https 공개 페이지 중 네가 실제로 열어 본 것만: 공식 문서의 해당 기능 부분, 깃허브 레포, 릴리스 노트,
    공식 블로그 글. 페이지 윗부분이 찍히므로 그 내용이 맨 위에 나오는 주소(가능하면 #앵커)로. 뉴스 기사·남의 사진·SNS 게시물은 안 됨.
    after: 이 화면을 끼울 위치(그 번호의 슬라이드 다음, 1부터).
+6. 표지 사진(photo, 없으면 null): 주제에 자연스럽게 어울리는 실사 배경이 떠오를 때만 Pixabay 영어 검색어 2~4단어
+   (예: 증시 → "stock chart screen", 데이터센터 → "server room", 우주 → "night sky stars"). 사람·얼굴·로고·제품·뉴스 장면은 안 됨.
+   추상적인 주제(새 기능 정리, 개념 설명 등)나 억지로 끼워 맞춰야 하면 null. 남발하지 말 것.
 
 # 출력 (JSON 하나만)
 {{"title": "게시물 제목(관리용)",
@@ -46,6 +49,7 @@ CONTENT_PROMPT = """너는 한국어 인스타그램 카드뉴스 에디터다. 
   ],
   "sources": ["출처 언론사·기관명"],
   "shots": [{{"url": "https://...", "head": "화면 제목(20자 이내)", "caption": "이 화면에서 볼 것 한 줄", "after": 2}}],
+  "photo": "server room" 또는 null,
   "caption": "..."}}"""
 
 DESIGN_PROMPT = """아래 디자인 지침을 따르는 디자이너로서, 주어진 카드뉴스 원고를 인스타그램 캐러셀 슬라이드 HTML로 디자인하라.
@@ -103,7 +107,8 @@ def split_teaser(text: str) -> tuple[str, list[str]]:
 
 
 def template_slides(content: dict[str, Any], art: list[str | None] | None = None,
-                    kicker: str | None = None) -> list[tuple[str, dict[str, Any]]]:
+                    kicker: str | None = None, photo: Any = None) -> list[tuple[str, dict[str, Any]]]:
+    """photo(photos.Photo)가 있으면 표지만 사진 배경 (일러스트는 빼고)."""
     # 출처 전체는 캡션에 있으니 하단에는 짧게 (예전엔 첫 출처가 모든 장에 잘려 찍혔다)
     foot = "출처는 캡션에" if content.get("sources") else ""
     c = {"brand": content.get("brand", ""), "report_name": "", "date_label": "", "footnote": foot}
@@ -115,7 +120,9 @@ def template_slides(content: dict[str, Any], art: list[str | None] | None = None
             sub, teaser = split_teaser(s.get("subtitle") or "")
             teaser = teaser or [str(x) for x in s.get("points") or []][:5]
             out.append(("story", {**c, "kind": "cover", "title": s.get("title", ""), "subtitle": sub,
-                                  "teaser": teaser, "kicker": kicker, "art": a}))
+                                  "teaser": teaser, "kicker": kicker, "art": None if photo else a,
+                                  "photo": photo.path.resolve().as_uri() if photo else None,
+                                  "photo_credit": photo.credit if photo else None}))
         elif t == "stat":
             out.append(("story", {**c, "kind": "stat", "title": s.get("title", ""), "value": s.get("value", ""),
                                   "label": s.get("label"), "body": s.get("body"), "art": a}))
@@ -253,7 +260,13 @@ def make_topic(topic: str, cfg: dict[str, Any], out_dir: Path, design: str = "te
     art = illustrate(content, cfg, theme)
     log.info("일러스트 %d/%d장", sum(1 for a in art if a), len(content["slides"]))
     (out_dir.parent / "art.json").write_text(json.dumps(art, ensure_ascii=False), encoding="utf-8")  # 다시 그릴 때 재사용
-    media = render(template_slides(content, art, kicker), out_dir, theme=theme)
+    from . import photos
+    photo = photos.find(content.get("photo"), out_dir.parent)
+    if photo:
+        log.info("표지 사진: %s (%s)", content["photo"], photo.credit)
+        content["caption"] = photos.add_credit(content["caption"], photo)
+        content["photo_credit"] = {"credit": photo.credit, "page": photo.page}
+    media = render(template_slides(content, art, kicker, photo), out_dir, theme=theme)
     if topic_key and content.get("shots"):
         from . import shots
         try:
