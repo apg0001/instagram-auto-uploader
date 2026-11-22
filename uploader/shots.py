@@ -33,6 +33,30 @@ def public_url(url: str) -> bool:
     return bool(addrs) and all(ipaddress.ip_address(a).is_global for a in addrs)
 
 
+BLOCK_WORDS = ("just a moment", "verify you are human", "checking your browser", "attention required", "access denied",
+               "enable javascript", "are you a robot", "captcha", "사람인지 확인", "보안 확인", "403 forbidden", "404 not found",
+               "page not found", "페이지를 찾을 수 없")
+
+
+def blocked(title: str, text: str) -> str | None:
+    """봇 차단·오류 페이지면 이유. 본문 글이 너무 적어도 (빈 화면·로딩만) 버린다."""
+    low = f"{title}\n{text[:3000]}".lower()
+    for w in BLOCK_WORDS:
+        if w in low:
+            return f"차단·오류 화면 '{w}'"
+    if len(" ".join(text.split())) < 200:
+        return "본문 글이 거의 없음"
+    return None
+
+
+def blank(png: Path) -> str | None:
+    """찍힌 화면이 거의 단색이면 (흰 화면·로딩 중) 이유."""
+    from PIL import Image, ImageStat
+
+    st = ImageStat.Stat(Image.open(png).convert("L").resize((270, 400)))
+    return "거의 빈 화면" if st.stddev[0] < 12 else None
+
+
 def capture(urls: list[str], out_dir: Path) -> list[Path | None]:
     """페이지 윗부분을 휴대폰 폭(540px, 2배율)으로 찍는다. 실패한 것은 None."""
     from playwright.sync_api import sync_playwright
@@ -65,9 +89,15 @@ def capture(urls: list[str], out_dir: Path) -> list[Path | None]:
                       el.style.display = 'none';
                   }
                 }""")
+                why = blocked(page.title(), page.evaluate("() => (document.body && document.body.innerText) || ''"))
                 f = out_dir / f"page{i}.png"
                 page.screenshot(path=str(f))
-                res.append(f)
+                why = why or blank(f)
+                if why:
+                    log.warning("실제 화면 버림 (%s): %s", why, url)
+                    res.append(None)
+                else:
+                    res.append(f)
             except Exception as e:  # noqa: BLE001
                 log.warning("실제 화면 실패 %s: %s", url, e)
                 res.append(None)
