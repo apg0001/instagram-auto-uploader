@@ -480,8 +480,9 @@ class Pipeline:
 
     def generate_topic(self, topic: str, design: str = "template", source: str = "topic",
                        topic_theme: str | None = None, title: str | None = None,
-                       scheduled_at: float | None = None) -> Post:
-        """요청형: 주제를 조사해 카드뉴스 초안을 만든다. 노션 기획 DB에서는 source=plan-<주제>."""
+                       scheduled_at: float | None = None, reel_at: float | None = None) -> Post:
+        """요청형: 주제를 조사해 카드뉴스 초안을 만든다. 노션 기획 DB에서는 source=plan-<주제>.
+        reel_at 이 있으면 같은 카드로 내레이션 릴스도 만들어 그 시각에 예약한다 (실패해도 캐러셀은 남김)."""
         from . import custom
 
         theme = topic_theme or themes.topic_of(source)
@@ -490,10 +491,33 @@ class Pipeline:
                                            kicker=title, topic_key=theme)
         kind = "CAROUSEL" if len(media) > 1 else "IMAGE"
         head = f"[{title}]" if title else "[주제]"
-        return self._finalize(pid, source, kind, f"{head} {content.get('title', topic[:40])}", content["caption"], media,
+        post = self._finalize(pid, source, kind, f"{head} {content.get('title', topic[:40])}", content["caption"], media,
                               ["image"] * len(media),
                               meta={"check": "none", "topic": topic, "design": design, "topic_theme": theme},
                               scheduled_at=scheduled_at)
+        if reel_at and len(media) > 1:
+            try:
+                self.generate_slide_reel(content, media, source, title or "카드뉴스", theme, reel_at)
+            except Exception as e:  # noqa: BLE001 — 릴스가 실패해도 캐러셀은 그대로 올라간다
+                log.exception("카드뉴스 릴스 실패")
+                self.record_failure(f"{source}:reel", e)
+        return post
+
+    def generate_slide_reel(self, content: dict, cards: list[Path], source: str, title: str, theme: str,
+                            scheduled_at: float | None = None) -> Post:
+        """캐러셀 카드 + 타입캐스트 내레이션 → 릴스 (slide_reel)."""
+        from . import photos, slide_reel
+
+        pid, work = self._new_id(source, "reels")
+        day = datetime.now(self.tz)
+        res = slide_reel.build(content, cards, work / "out", self.cfg.caption, f"{title} · {day.month}/{day.day}",
+                               theme, int(day.strftime("%Y%m%d")))
+        caption = res.caption
+        if content.get("photo_credit"):  # 표지 사진 출처는 릴스에도
+            pc = content["photo_credit"]
+            caption = photos.add_credit(caption, photos.Photo(Path(), pc["author"], pc["page"]))
+        return self._finalize(pid, source, "REELS", f"[{title} · 릴스] {content.get('title', '')}", caption, [res.reel],
+                              ["video"], res.cover, {"check": "none", "topic_theme": theme}, scheduled_at)
 
     def post_manual(self, title: str, text: str, files: list[Path]) -> Post:
         """요청형: 준비된 이미지·영상과 캡션으로 바로 초안을 만든다."""

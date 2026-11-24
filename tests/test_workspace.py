@@ -96,3 +96,11 @@ def test_recent_failures_shown_in_summary():
     fails = workspace.recent_failures(raw, now)
     assert fails == ["11/21 09:00 주간 증시 리포트: CaptionError: 숫자"]
     assert "⚠️ 생성 실패 11/21 09:00 주간 증시 리포트" in workspace.summary_text(now, [], [], [], fails)
+
+
+def test_week_rows_shows_card_reels():
+    now = datetime(2026, 11, 26, 8, 0, tzinfo=KST)  # 목
+    plan = [row(이름="주 2회 신규 기술 브리핑", 상태="사용", 주기="매주", 요일="월,목", **{"게시 시각": "12:00"},
+                **{"릴스": "목 18:00"})]
+    got = [(f"{t:%a %H:%M}", w) for t, w, _ in workspace.week_rows(now, [], plan)]
+    assert ("Thu 12:00", "주 2회 신규 기술 브리핑") in got and ("Thu 18:00", "주 2회 신규 기술 브리핑 릴스") in got

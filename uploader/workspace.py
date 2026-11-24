@@ -450,7 +450,12 @@ def week_rows(now: datetime, posts: list[dict], plan_rows: list[dict]) -> list[t
         hops = 0
         while at and at <= end and hops < 14:
             reel = prop_text(pr, "생성기") == "깃허브 트렌딩 릴스"
-            for t, label in ((at, f"{name} 캐러셀" if reel else name),) + (((at + timedelta(hours=8), f"{name} 릴스"),) if reel else ()):
+            items = [(at, f"{name} 캐러셀" if reel else name)]
+            if reel:
+                items.append((at + timedelta(hours=8), f"{name} 릴스"))
+            elif (rt := planner.reel_time(prop_text(pr, "릴스"), at)):  # 카드뉴스 + 내레이션 릴스
+                items.append((datetime.fromtimestamp(rt, now.tzinfo), f"{name} 릴스"))
+            for t, label in items:
                 if t >= now - timedelta(minutes=5) and t <= end and f"{t:%m%d%H%M}" not in taken:
                     out.append((t, label, "⏳ 만들 예정"))
             if cadence == "한 번":

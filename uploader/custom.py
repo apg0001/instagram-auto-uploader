@@ -266,7 +266,7 @@ def make_topic(topic: str, cfg: dict[str, Any], out_dir: Path, design: str = "te
     if photo:
         log.info("표지 사진: %s (%s)", content["photo"], photo.credit)
         content["caption"] = photos.add_credit(content["caption"], photo)
-        content["photo_credit"] = {"credit": photo.credit, "page": photo.page}
+        content["photo_credit"] = {"credit": photo.credit, "author": photo.author, "page": photo.page}
     media = render(template_slides(content, art, kicker, photo), out_dir, theme=theme)
     if topic_key and content.get("shots"):
         from . import shots

@@ -131,6 +131,7 @@ PLAN_PROPS = {
     "횟수": {"number": {}},
     "만든 횟수": {"number": {}},
     "이어서": {"rich_text": {}},
+    "릴스": {"rich_text": {}},  # 예: "목 18:00" — 캐러셀 뒤 48시간 안의 이 시각에 같은 카드로 내레이션 릴스도
     "오류": {"rich_text": {}},
 }
 RENAMED = {"시각": "게시 시각", "다음 생성": "다음 게시"}  # 예전 이름 → 새 이름 (setup_dashboard가 바꿈)
@@ -353,7 +354,22 @@ def generate_for(pl: Pipeline, pr: dict, at: datetime | None) -> None:
     else:
         topic = themes.from_ko(prop_text(pr, "주제")) or "tech"
         pl.generate_topic(brief_for(pl, pr), source=f"plan-{topic}", topic_theme=topic, title=prop_text(pr, "이름"),
-                          scheduled_at=ts)
+                          scheduled_at=ts, reel_at=reel_time(prop_text(pr, "릴스"), at or datetime.now(pl.tz)))
+
+
+def reel_time(rule: str, after: datetime, within_h: float = 48) -> float | None:
+    """'릴스' 칸("목 18:00", "월,목 18:00")에서 캐러셀 시각(after) 뒤 within_h 시간 안의 첫 시각. 없으면 None."""
+    import re
+
+    m = re.match(r"\s*([월화수목금토일,\s]+)\s+(\d{1,2}):(\d{2})\s*$", rule or "")
+    if not m:
+        return None
+    days = [DAYS.index(d) for d in m.group(1).replace(" ", "").split(",") if d in DAYS]
+    for k in range(int(within_h // 24) + 2):
+        t = (after + timedelta(days=k)).replace(hour=int(m.group(2)), minute=int(m.group(3)), second=0, microsecond=0)
+        if t.weekday() in days and after < t <= after + timedelta(hours=within_h):
+            return t.timestamp()
+    return None
 
 
 def run_due(pl: Pipeline, page: dict, now: datetime, rows: list[dict] | None = None) -> bool:
