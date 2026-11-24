@@ -358,7 +358,8 @@ def short_title(title: str, n: int = 48) -> str:
 
 
 SOURCE_KO = {"market:premarket": "장 전 브리핑", "market:close": "장 마감 시황", "market:weekly": "주간 증시 리포트",
-             "market:monthly": "월간 증시 리포트", "github-trending": "깃허브 Top 5", "whatif": "만약에 릴스"}
+             "market:monthly": "월간 증시 리포트", "github-trending": "깃허브 Top 5", "whatif": "만약에 릴스",
+             "news": "AI 속보 감시"}
 
 
 def recent_failures(raw: str | None, now: datetime, hours: int = 24) -> list[str]:
