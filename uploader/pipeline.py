@@ -513,9 +513,11 @@ class Pipeline:
         res = slide_reel.build(content, cards, work / "out", self.cfg.caption, f"{title} · {day.month}/{day.day}",
                                theme, int(day.strftime("%Y%m%d")))
         caption = res.caption
-        if content.get("photo_credit"):  # 표지 사진 출처는 릴스에도
-            pc = content["photo_credit"]
-            caption = photos.add_credit(caption, photos.Photo(Path(), pc["author"], pc["page"]))
+        if content.get("photo_credit"):  # 카드에 깐 사진 출처는 릴스에도
+            pcs = content["photo_credit"]
+            pcs = pcs if isinstance(pcs, list) else [pcs]
+            caption = photos.add_credit(caption, [photos.Photo(Path("cover" if pc.get("cover", True) else "slide"), pc["author"], pc["page"])
+                                                  for pc in pcs])
         return self._finalize(pid, source, "REELS", f"[{title} · 릴스] {content.get('title', '')}", caption, [res.reel],
                               ["video"], res.cover, {"check": "none", "topic_theme": theme}, scheduled_at)
 
