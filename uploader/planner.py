@@ -332,6 +332,9 @@ def brief_for(pl: Pipeline, pr: dict) -> str:
     if done:
         brief += "\n\n# 이 시리즈에서 이미 다룬 것 (같은 주제·용어를 다시 다루지 말 것)\n" + "\n".join(
             f"- {t.removeprefix(f'[{name}]').strip()}" for t in done)
+    if "뉴스" in name or "브리핑" in name:  # 속보 감시가 모아 둔 소식을 놓치지 않게
+        from . import newswatch
+        brief += newswatch.backlog_text(pl)
     return brief
 
 

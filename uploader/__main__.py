@@ -46,6 +46,7 @@ def main(argv: list[str] | None = None) -> int:
     w.add_argument("--at", help="예약 시각 (예: 2026-11-21T20:00)")
     cc = sub.add_parser("check-cards", help="템플릿을 고친 뒤: 최근 게시물을 지금 템플릿으로 다시 찍어 겹침·잘림 검사 (올리지 않음)")
     cc.add_argument("-n", type=int, default=8)
+    sub.add_parser("news", help="AI·테크 속보 감시: 큰 소식은 바로 속보 캐러셀, 나머지는 브리핑 후보로")
     sub.add_parser("engagement", help="최근 게시물 좋아요·댓글 수를 노션에, 댓글 속 아이디어를 아이디어 수신함에")
     n = sub.add_parser("notion-setup", help="노션 페이지 아래에 게시물 DB 생성")
     n.add_argument("parent", help="통합을 연결한 노션 페이지 URL 또는 id")
@@ -58,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
     # 동시 실행 방지 (cron에서 sync가 겹치거나 generate와 겹치지 않게)
     # sync는 바로 포기(1분 뒤 다시 돈다), plan은 같은 분에 시작한 sync가 끝나길 최대 50초 기다린다.
     lock = open(cfg.data_dir / ".lock", "w")
-    wait = {"sync": 0, "plan": 50}.get(args.cmd)
+    wait = {"sync": 0, "plan": 50, "news": 50}.get(args.cmd)
     if wait is None:
         fcntl.flock(lock, fcntl.LOCK_EX)
     else:
@@ -136,6 +137,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"이미지: {out} (눈으로 확인)")
         if any(not r.startswith("OK") for _, r in res):
             return 1
+    elif args.cmd == "news":
+        from . import newswatch
+        try:
+            print(newswatch.run(pl))
+        except Exception as e:
+            pl.record_failure("news", e)
+            raise
     elif args.cmd == "engagement":
         from . import engagement
         print(engagement.collect(pl) or "꺼져 있음 (config engagement.enabled)")
