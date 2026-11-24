@@ -30,6 +30,7 @@ class Photo:
     path: Path
     author: str
     page: str
+    id: int = 0
 
     @property
     def credit(self) -> str:
@@ -64,7 +65,7 @@ def relevant(hit: dict, query: str) -> bool:
     return any(w in tags for w in query.lower().split() if len(w) > 2)
 
 
-def search(query: str, key: str, colors: str | None = None, n: int = 4) -> list[dict]:
+def search(query: str, key: str, colors: str | None = None, n: int = 4, exclude: set | None = None) -> list[dict]:
     """후보 n장: 주제 색(colors)에 맞는 사진을 앞에, 그다음 색 필터 없는 사진. 세로 사진 우선."""
     params = {"key": key, "q": query[:100], "image_type": "photo", "safesearch": "true", "per_page": 30,
               "order": "popular", "min_width": SIZE[0]}
@@ -74,7 +75,7 @@ def search(query: str, key: str, colors: str | None = None, n: int = 4) -> list[
             extra = {"orientation": orient, **({"colors": color} if color else {})}
             r = requests.get(API, params={**params, **extra}, timeout=20)
             r.raise_for_status()
-            seen = {h["id"] for h in out}
+            seen = {h["id"] for h in out} | (exclude or set())
             out += [h for h in r.json().get("hits", [])
                     if usable(h) and relevant(h, query) and h.get("id") not in seen][: n - len(out)]
             if len(out) >= n:
@@ -119,33 +120,42 @@ def fit(raw: bytes, out: Path) -> Path:
 
 
 def find(query: str | None, out_dir: Path, colors: str | None = None, topic: str = "",
-         cfg: dict | None = None) -> Photo | None:
-    """query(영어 검색어)에 맞는 사진을 받아 out_dir/cover-photo.jpg 로. 실패하면 None.
+         cfg: dict | None = None, name: str = "cover-photo", exclude: set | None = None) -> Photo | None:
+    """query(영어 검색어)에 맞는 사진을 받아 out_dir/<name>.jpg 로. 실패하면 None.
+    exclude: 이미 쓴 사진 id (한 게시물 안에서 같은 사진 반복 금지).
     colors: 주제 색과 어울리는 Pixabay 색 필터 (themes 의 photo).
     cfg(Claude 설정)를 주면 Claude가 후보를 직접 보고 고른다 (사람·로고가 찍힌 사진 거르기)."""
     key = os.environ.get("PIXABAY_API_KEY")
     if not query or not key:
         return None
     try:
-        hits = search(query, key, colors)
+        hits = search(query, key, colors, exclude=exclude)
         if not hits:
             log.info("표지 사진 없음: %s", query)
             return None
-        h = review(hits, topic or query, cfg, out_dir / "photo-candidates") if cfg else hits[0]
+        h = review(hits, topic or query, cfg, out_dir / f"{name}-candidates") if cfg else hits[0]
         if not h:
             log.info("표지 사진: 어울리는 후보 없음 (%s)", query)
             return None
         out_dir.mkdir(parents=True, exist_ok=True)
-        path = fit(download(h["largeImageURL"]), out_dir / "cover-photo.jpg")
-        return Photo(path, str(h.get("user") or "Pixabay"), str(h.get("pageURL") or "https://pixabay.com"))
+        path = fit(download(h["largeImageURL"]), out_dir / f"{name}.jpg")
+        return Photo(path, str(h.get("user") or "Pixabay"), str(h.get("pageURL") or "https://pixabay.com"),
+                     int(h.get("id") or 0))
     except Exception as e:  # noqa: BLE001 — 사진이 없어도 표지는 만든다
         log.warning("표지 사진 실패(%s): %s", query, e)
         return None
 
 
-def add_credit(caption: str, photo: Photo) -> str:
-    """캡션의 해시태그 줄 바로 앞에 사진 출처를 넣는다."""
-    line = f"표지 {photo.credit}"  # 캡션 이모지 수 제한이 있어 글로만
+def add_credit(caption: str, photo: Photo | list[Photo]) -> str:
+    """캡션의 해시태그 줄 바로 앞에 사진 출처를 넣는다. 여러 장이면 작가를 모아 한 줄로."""
+    many = photo if isinstance(photo, list) else [photo]
+    if not many:
+        return caption
+    if len(many) == 1:
+        cover = many[0].path.name.startswith("cover")
+        line = ("표지 " if cover else "") + many[0].credit  # 캡션 이모지 수 제한이 있어 글로만
+    else:
+        line = "사진: " + ", ".join(dict.fromkeys(p.author for p in many)) + " / Pixabay"
     lines = caption.rstrip().split("\n")
     i = len(lines)
     while i > 0 and lines[i - 1].strip().startswith("#"):
