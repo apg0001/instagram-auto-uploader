@@ -39,6 +39,15 @@
   .teaser div { background: rgba(10,12,20,.55); backdrop-filter: blur(6px); }
   .teaser span { color: #fff; }
   .teaser b { box-shadow: 0 0 0 2px rgba(255,255,255,.45); }
+  {% if kind != "cover" %}
+  /* 안쪽 장: 글이 많으니 더 어둡게 고르게 덮고, 항목 상자는 반투명 */
+  .photo::after { background: linear-gradient(180deg, rgba(8,10,16,.62) 0%, rgba(8,10,16,.52) 45%,
+      color-mix(in srgb, var(--accent) 20%, rgba(8,10,16,.78)) 100%); }
+  h1, .lead, .label { text-shadow: 0 2px 16px rgba(0,0,0,.6); }
+  .item { background: rgba(10,12,20,.64); backdrop-filter: blur(6px); }
+  .body { color: rgba(255,255,255,.9); opacity: 1; }
+  .value { color: color-mix(in srgb, var(--accent) 45%, #FFFFFF); text-shadow: 0 4px 24px rgba(0,0,0,.5); }
+  {% endif %}
   {% endif %}
 {% endblock %}
 {% block content %}

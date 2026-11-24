@@ -16,7 +16,7 @@ def test_usable_skips_people_logos_and_small():
 
 
 def test_credit_goes_before_hashtags():
-    p = photos.Photo(Path("x.jpg"), "Apke", "https://pixabay.com/x")
+    p = photos.Photo(Path("cover-photo.jpg"), "Apke", "https://pixabay.com/x")
     cap = "훅\n본문\n\n#AI #테크"
     out = photos.add_credit(cap, p)
     assert out == "훅\n본문\n표지 사진: Apke / Pixabay\n\n#AI #테크"
@@ -70,3 +70,27 @@ def test_search_puts_theme_colors_first(monkeypatch):
     got = photos.search("server room", "k", "blue,lilac", n=3)
     assert [h["id"] for h in got] == [100, 101, 200]
     assert calls == [("blue,lilac", "vertical"), ("blue,lilac", "horizontal"), (None, "vertical")]
+
+
+def test_inner_photo_slots_skip_cover_last_and_neighbors():
+    s = [{"type": "cover", "photo": "a"}, {"photo": "b"}, {"photo": "c"}, {}, {"photo": "d"}, {"photo": "e"}, {"photo": "f"}]
+    assert custom.inner_photo_slots(s) == [1, 4]  # 2는 1 바로 뒤, 6은 마지막 장, 최대 2장
+    assert custom.inner_photo_slots([{"type": "cover"}, {}, {}]) == []
+
+
+def test_inner_photo_replaces_art_on_that_slide_only():
+    content = {"slides": [{"type": "cover", "title": "t"}, {"type": "points", "title": "a"},
+                          {"type": "stat", "title": "b", "value": "3배"}, {"type": "points", "title": "끝"}]}
+    ph = photos.Photo(Path("slide3-photo.jpg"), "Apke", "https://pixabay.com/x", 7)
+    out = custom.template_slides(content, ["<svg/>"] * 4, inner={2: ph})
+    assert out[2][1]["photo"].endswith("slide3-photo.jpg") and out[2][1]["art"] is None
+    assert "Apke" in out[2][1]["photo_credit"]
+    assert out[1][1]["art"] == "<svg/>" and not out[1][1].get("photo")
+
+
+def test_several_credits_in_one_line():
+    a = photos.Photo(Path("cover-photo.jpg"), "Apke", "p")
+    b = photos.Photo(Path("slide3-photo.jpg"), "Kim", "p")
+    cap = photos.add_credit("훅\n\n#AI", [a, b, a])
+    assert "사진: Apke, Kim / Pixabay\n\n#AI" in cap
+    assert photos.add_credit("훅", [b]).endswith("\n\n사진: Kim / Pixabay")

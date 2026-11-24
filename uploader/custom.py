@@ -39,13 +39,16 @@ CONTENT_PROMPT = """너는 한국어 인스타그램 카드뉴스 에디터다. 
 6. 표지 사진(photo, 없으면 null): 주제에 자연스럽게 어울리는 실사 배경이 떠오를 때만 Pixabay 영어 검색어 2~4단어
    (예: 증시 → "stock chart screen", 데이터센터 → "server room", 우주 → "night sky stars"). 사람·얼굴·로고·제품·뉴스 장면은 안 됨.
    추상적인 주제(새 기능 정리, 개념 설명 등)나 억지로 끼워 맞춰야 하면 null. 남발하지 말 것.
+7. 안쪽 장 사진(slides[].photo, 0~2장): 배경이 단조롭지 않게, 실사 장면이 자연스럽게 떠오르는 장에만 Pixabay 영어 검색어 2~4단어
+   (예: 전력 사용량 stat → "power plant night", 데이터 센터 이야기 → "server racks"). 표지·마지막 장 제외, 연달아 두 장 금지,
+   표지 사진과 다른 장면으로. 같은 조건(사람·로고·제품·뉴스 장면 금지). 어울리는 장이 없으면 하나도 넣지 않는다.
 
 # 출력 (JSON 하나만)
 {{"title": "게시물 제목(관리용)",
   "slides": [
     {{"type": "cover", "title": "표지 제목", "subtitle": "부제 한 줄", "points": ["이 게시물에서 다룰 것 3~5개, 각 25자 이내"]}},
     {{"type": "points", "title": "슬라이드 제목", "lead": "한두 문장 또는 null", "items": [{{"head": "굵은 머리말", "body": "설명"}}]}},
-    {{"type": "stat", "title": "슬라이드 제목", "value": "큰 숫자나 짧은 말", "label": "무엇의 값인지", "body": "설명"}}
+    {{"type": "stat", "title": "슬라이드 제목", "value": "큰 숫자나 짧은 말", "label": "무엇의 값인지", "body": "설명", "photo": "power plant night"}}
   ],
   "sources": ["출처 언론사·기관명"],
   "shots": [{{"url": "https://...", "head": "화면 제목(20자 이내)", "caption": "이 화면에서 볼 것 한 줄", "after": 2}}],
@@ -107,8 +110,11 @@ def split_teaser(text: str) -> tuple[str, list[str]]:
 
 
 def template_slides(content: dict[str, Any], art: list[str | None] | None = None,
-                    kicker: str | None = None, photo: Any = None) -> list[tuple[str, dict[str, Any]]]:
-    """photo(photos.Photo)가 있으면 표지만 사진 배경 (일러스트는 빼고)."""
+                    kicker: str | None = None, photo: Any = None,
+                    inner: dict[int, Any] | None = None) -> list[tuple[str, dict[str, Any]]]:
+    """photo(photos.Photo)가 있으면 표지를 사진 배경으로, inner({장 번호(0부터): Photo})는 안쪽 장 사진 배경.
+    사진을 깐 장은 일러스트를 뺀다."""
+    inner = inner or {}
     # 출처 전체는 캡션에 있으니 하단에는 짧게 (예전엔 첫 출처가 모든 장에 잘려 찍혔다)
     foot = "출처는 캡션에" if content.get("sources") else ""
     c = {"brand": content.get("brand", ""), "report_name": "", "date_label": "", "footnote": foot}
@@ -116,6 +122,8 @@ def template_slides(content: dict[str, Any], art: list[str | None] | None = None
     for i, s in enumerate(content["slides"][:10]):
         t = s.get("type")
         a = art[i] if art and i < len(art) else None
+        ph = inner.get(i)
+        bg = {"photo": ph.path.resolve().as_uri(), "photo_credit": ph.credit, "art": None} if ph and t != "cover" else {}
         if t == "cover":
             sub, teaser = split_teaser(s.get("subtitle") or "")
             teaser = teaser or [str(x) for x in s.get("points") or []][:5]
@@ -125,10 +133,10 @@ def template_slides(content: dict[str, Any], art: list[str | None] | None = None
                                   "photo_credit": photo.credit if photo else None}))
         elif t == "stat":
             out.append(("story", {**c, "kind": "stat", "title": s.get("title", ""), "value": s.get("value", ""),
-                                  "label": s.get("label"), "body": s.get("body"), "art": a}))
+                                  "label": s.get("label"), "body": s.get("body"), "art": a, **bg}))
         else:
             out.append(("story", {**c, "kind": "points", "title": s.get("title", ""), "lead": s.get("lead"),
-                                  "items": s.get("items") or [], "art": a}))
+                                  "items": s.get("items") or [], "art": a, **bg}))
     return out
 
 
@@ -249,6 +257,16 @@ def free_design(content: dict[str, Any], cfg: dict[str, Any], out_dir: Path) -> 
     return paths
 
 
+def inner_photo_slots(slides: list[dict[str, Any]], limit: int = 2) -> list[int]:
+    """안쪽 장 사진 자리: 표지·마지막 장 빼고, 연달아 두 장 안 되게, 최대 limit장."""
+    out: list[int] = []
+    for i, s in enumerate(slides[:10]):
+        if 0 < i < len(slides) - 1 and s.get("type") != "cover" and s.get("photo") \
+                and (not out or i - out[-1] > 1) and len(out) < limit:
+            out.append(i)
+    return out
+
+
 def make_topic(topic: str, cfg: dict[str, Any], out_dir: Path, design: str = "template",
                theme: dict[str, str] | None = None, kicker: str | None = None,
                topic_key: str | None = None) -> tuple[dict[str, Any], list[Path]]:
@@ -263,11 +281,23 @@ def make_topic(topic: str, cfg: dict[str, Any], out_dir: Path, design: str = "te
     from . import photos, themes
     colors = themes.get(topic_key)["photo"] if topic_key else None
     photo = photos.find(content.get("photo"), out_dir.parent, colors, topic=content.get("title") or topic, cfg=cfg)
+    used = [photo] if photo else []
     if photo:
         log.info("표지 사진: %s (%s)", content["photo"], photo.credit)
-        content["caption"] = photos.add_credit(content["caption"], photo)
-        content["photo_credit"] = {"credit": photo.credit, "author": photo.author, "page": photo.page}
-    media = render(template_slides(content, art, kicker, photo), out_dir, theme=theme)
+    inner: dict[int, Any] = {}
+    for i in inner_photo_slots(content["slides"]):
+        s = content["slides"][i]
+        ph = photos.find(s["photo"], out_dir.parent, colors, topic=s.get("title") or topic, cfg=cfg,
+                         name=f"slide{i + 1}-photo", exclude={p.id for p in used})
+        if ph:
+            log.info("%d장 사진: %s (%s)", i + 1, s["photo"], ph.credit)
+            inner[i] = ph
+            used.append(ph)
+    if used:
+        content["caption"] = photos.add_credit(content["caption"], used)
+        content["photo_credit"] = [{"credit": p.credit, "author": p.author, "page": p.page, "cover": p is photo}
+                                  for p in used]
+    media = render(template_slides(content, art, kicker, photo, inner), out_dir, theme=theme)
     if topic_key and content.get("shots"):
         from . import shots
         try:
