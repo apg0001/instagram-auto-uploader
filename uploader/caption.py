@@ -8,7 +8,13 @@ import tempfile
 from typing import Any
 
 MAX_CAPTION = 2200          # 인스타그램 캡션 최대 길이
-MAX_HASHTAGS = 8           # 규칙은 4~5개. 많으면 스팸처럼 보여 오히려 손해
+MAX_HASHTAGS = 5           # 인스타 해시태그 상한이 5개. 검색 키워드는 본문 문장에 넣는다
+HASHTAG = re.compile(r"(?<![\w#])#\w+")
+
+
+def count_hashtags(text: str) -> int:
+    """'#태그' 개수. 'C#'이나 문장 속 '#' 하나는 세지 않는다."""
+    return len(HASHTAG.findall(text))
 
 # 게시물에 레포·소스코드 이야기를 넣지 않는다 (게임만 소개).
 BANNED = [
@@ -38,7 +44,7 @@ def build_prompt(src: dict[str, Any], kind: str, scene: str, slides: list[str], 
 - 본문 4~7줄. 무엇을 해 주는지, 어떻게 쓰는지(설치 흐름), 개인정보·셀프 호스팅 같은 특징 중 2~3개를 구체적으로. 위 사실에 없는 기능·수치를 지어내지 않는다.
 - 레포 링크 줄을 꼭 넣는다: "▶ GitHub: {src['repo_url']}" (프로필 링크에도 있다고 덧붙인다).
 - 아직 베타라는 점을 솔직하게 한 줄 넣는다.
-- 마지막 줄에 해시태그 4~5개만: #{src['hashtag']} 1개 + 주제 태그 2~3개 + 대상 태그 1개(예: #개발자). 너무 큰 태그(#AI, #개발) 대신 구체적인 중간 크기 태그."""
+- 마지막 줄에 해시태그 딱 5개(검색 키워드는 본문 문장에)만: #{src['hashtag']} 1개 + 주제 태그 3개 + 대상 태그 1개(예: #개발자). 너무 큰 태그(#AI, #개발) 대신 구체적인 중간 크기 태그."""
     else:
         who = "인디 게임 개발자"
         subject = "게임"
@@ -46,7 +52,7 @@ def build_prompt(src: dict[str, Any], kind: str, scene: str, slides: list[str], 
 - 본문 3~6줄. 이번 장면과 게임 특징 1~2개만 골라 구체적으로. 위 사실에 없는 기능을 지어내지 않는다.
 - 플레이 링크 줄을 꼭 넣는다: "▶ 플레이: {src['play_url']}" (폰 가로·세로 모두, 설치 없이 브라우저에서).
 - GitHub 저장소, 레포, 소스코드, 오픈소스, 개발 과정 이야기는 절대 쓰지 않는다. 게임만 소개한다.
-- 마지막 줄에 해시태그 4~5개만 (한국어 위주): #{src.get('hashtag', '랩워즈')} 1개 + 주제 태그 2~3개(#웹게임추천 #디펜스게임 등) + 대상 태그 1개(#대학원생공감 등). 너무 큰 태그는 쓰지 않는다."""
+- 마지막 줄에 해시태그 딱 5개(검색 키워드는 본문 문장에)만 (한국어 위주): #{src.get('hashtag', '랩워즈')} 1개 + 주제 태그 3개(#웹게임추천 #디펜스게임 등) + 대상 태그 1개(#대학원생공감 등). 너무 큰 태그는 쓰지 않는다."""
     return f"""너는 {who}의 인스타그램 계정 캡션을 쓰는 사람이다. 아래 {subject}를 소개하는 {kind_ko} 게시물 캡션을 한국어로 써라.
 
 # {subject}
@@ -77,7 +83,7 @@ def validate(caption: str, link: str, allow_repo: bool = False) -> list[str]:
         problems.append("빈 캡션")
     if len(caption) > MAX_CAPTION:
         problems.append(f"{MAX_CAPTION}자 초과")
-    if caption.count("#") > MAX_HASHTAGS:
+    if count_hashtags(caption) > MAX_HASHTAGS:
         problems.append(f"해시태그 {MAX_HASHTAGS}개 초과")
     if link.rstrip("/") not in caption:
         problems.append("필수 링크 없음")
