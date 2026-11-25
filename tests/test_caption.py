@@ -30,6 +30,13 @@ def test_too_long_and_too_many_hashtags():
     assert any("해시태그" in p for p in validate(URL + " #a" * 31, URL))
 
 
+def test_hashtag_limit_is_five_and_ignores_csharp():
+    from uploader.caption import count_hashtags
+    assert count_hashtags("C# 입문 #1위 아님\n#a #b #c") == 4
+    assert not any("해시태그" in p for p in validate(URL + " C#\n#a #b #c #d #e", URL))
+    assert any("해시태그" in p for p in validate(URL + "\n#a #b #c #d #e #f", URL))
+
+
 def test_parse_extracts_json_from_noise():
     assert parse('앞말\n{"caption": "안녕"}\n뒷말') == "안녕"
 
