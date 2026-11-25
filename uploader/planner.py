@@ -433,6 +433,11 @@ def run(pl: Pipeline) -> None:
     for page in rows:
         if prop_text(page["properties"], "상태") == ACTIVE and run_due(pl, page, now, rows):
             break
+    try:  # 윈도우 PC 영상 릴스: 끝난 건 초안으로, 늦거나 실패한 건 카드 릴스로
+        from . import film
+        film.poll(pl)
+    except Exception:  # noqa: BLE001
+        log.exception("영상 작업 확인 실패")
     try:
         timetable.refresh(pl, rows)
     except Exception:  # noqa: BLE001 — 표 갱신 실패가 생성을 막지 않게
