@@ -50,7 +50,7 @@ REFINE_PROMPT = """너는 개발자 개인 인스타그램 계정의 콘텐츠 �
 - 사실은 출처가 확인된 것만. 공식 발표·공개 통계·API 데이터 우선, 마지막 장에 출처.
 - 투자 권유·종목 추천·매수/매도 표현 금지 (증시는 정보 제공 + 면책 문구).
 - 개인 실명·사생활, 확인 안 된 루머, 비방 금지. 뉴스 사진 등 남의 이미지 쓰지 않음(카드는 직접 디자인).
-- 해시태그 4~5개, 첫 줄에 검색 키워드가 담긴 훅.
+- 해시태그 딱 5개(검색 키워드는 본문 문장에), 첫 줄에 검색 키워드가 담긴 훅.
 - 카드 4~8장, 한 장에 한 메시지.
 
 # 메모
@@ -433,6 +433,11 @@ def run(pl: Pipeline) -> None:
     for page in rows:
         if prop_text(page["properties"], "상태") == ACTIVE and run_due(pl, page, now, rows):
             break
+    try:  # 윈도우 PC 영상 릴스: 끝난 건 초안으로, 늦거나 실패한 건 카드 릴스로
+        from . import film
+        film.poll(pl)
+    except Exception:  # noqa: BLE001
+        log.exception("영상 작업 확인 실패")
     try:
         timetable.refresh(pl, rows)
     except Exception:  # noqa: BLE001 — 표 갱신 실패가 생성을 막지 않게

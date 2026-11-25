@@ -17,14 +17,13 @@ from typing import Any
 from PIL import Image, ImageDraw, ImageFont
 
 from . import bgm, themes, tts, typecast
-from .caption import CaptionError, call_claude, parse_json
+from .caption import MAX_HASHTAGS, CaptionError, call_claude, count_hashtags, parse_json
 from .compose import band, chip, font, text_block
 from .sources.github_trending import Repo, change, insight
 
 log = logging.getLogger("uploader")
 W, H = 1080, 1920
 TOP = 5
-MAX_HASHTAGS = 8
 FPS = 30
 ANIM = 18  # 등장 애니메이션 프레임 수 (0.6초)
 MONO = "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf"
@@ -47,9 +46,9 @@ SCRIPT_PROMPT = """너는 개발자 인스타그램 작가다. 이번 주 GitHub
 - name_ko: 레포 이름을 한국어로 읽는 법 (예: astryx → 아스트릭스). 내레이션에만 쓴다.
 - trend: 이번 주 흐름 한 줄 (예: AI 에이전트 도구 강세), 20자 이내.
 - caption_reel: 릴스 캡션. 첫 줄 검색 키워드 훅(예: 이번 주 깃허브 인기 레포 Top 5) → 레포 이름 다섯 줄(순위 숫자 없이)
-  → "자세한 정리는 피드 캐러셀에서" → 해시태그 4~5개. 짧게.
+  → "자세한 정리는 피드 캐러셀에서" → 해시태그 딱 5개(검색 키워드는 본문 문장에). 짧게.
 - caption_carousel: 캐러셀 캡션. 첫 줄 검색 키워드 훅 → 레포 다섯 개를 한 줄씩(이름 — 한 줄 설명) → "집계: GitHub Trending 주간, 이번 주 별 증가순"
-  → "저장해 두고 하나씩 써 보세요" 같은 한 줄 → 해시태그 4~5개.
+  → "저장해 두고 하나씩 써 보세요" 같은 한 줄 → 해시태그 딱 5개(검색 키워드는 본문 문장에).
 - 두 캡션 모두 투자 권유·과장 금지, 이모지 3개 이하. 레포 목록은 exclude 가 아닌 것 중 위에서 다섯 개 순서 그대로.
 
 # 출력 (JSON 하나만)
@@ -93,7 +92,7 @@ def validate_caption(text: str) -> list[str]:
         p.append("빈 캡션")
     if len(text) > 2200:
         p.append("2200자 초과")
-    if text.count("#") > MAX_HASHTAGS:
+    if count_hashtags(text) > MAX_HASHTAGS:
         p.append(f"해시태그 {MAX_HASHTAGS}개 초과")
     return p
 
