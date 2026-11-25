@@ -24,6 +24,11 @@ instagram:
 # 예약이 있는 게시물은 승인돼도 예약 시각까지 기다린다. (2026-11-18 사용자 결정: 전부 자동 승인)
 auto_approve: ["*"]
 
+# 카드뉴스 릴스('릴스' 칸)를 윈도우 PC의 Lemo-Opuscar 영상으로 (uploader/film.py). .env FILM_SSH_HOST=user@<PC 주소>
+# 끝나면 plan이 초안으로 올리고, 실패하거나 게시 2시간 전까지 못 끝내면 예전 카드 릴스로 대신한다.
+film:
+  enabled: true
+
 # '만약에' 3D 릴스 (video/whatif, Remotion). 처음 한 번: cd video/whatif && npm ci (Node 22, ~/.local/node)
 whatif:
   voice: tc_692799c46508f6b9468c54c7   # 타입캐스트 '다은' (.env TYPECAST_API_KEY, 없으면 edge-tts)

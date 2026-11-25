@@ -495,6 +495,14 @@ class Pipeline:
                               ["image"] * len(media),
                               meta={"check": "none", "topic": topic, "design": design, "topic_theme": theme},
                               scheduled_at=scheduled_at)
+        if reel_at and len(media) > 1 and (self.cfg.raw.get("film") or {}).get("enabled"):
+            from . import film
+            try:  # 윈도우 PC에서 영상으로 (끝나면 plan이 초안으로 올린다). 못 하면 아래 카드 릴스로
+                film.start(self, content, media, source, title or "카드뉴스", theme, reel_at)
+                reel_at = None
+            except Exception as e:  # noqa: BLE001
+                log.warning("영상 릴스 시작 실패 → 카드 릴스: %s", e)
+                self.record_failure(f"{source}:film", e)
         if reel_at and len(media) > 1:
             try:
                 self.generate_slide_reel(content, media, source, title or "카드뉴스", theme, reel_at)
