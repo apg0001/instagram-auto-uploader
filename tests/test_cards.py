@@ -15,7 +15,10 @@ def test_backticks_become_code():
     from uploader.cards.render import CODE_JS
 
     with pw.sync_playwright() as p:
-        b = p.chromium.launch()
+        try:
+            b = p.chromium.launch()
+        except pw.Error:
+            pytest.skip("브라우저 없음 (CI)")
         pg = b.new_page()
         pg.set_content("<p>설치: `ollama launch openclaw` 한 줄, 그리고 `hermes`</p>")
         assert pg.evaluate(CODE_JS) == 1
