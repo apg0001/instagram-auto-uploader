@@ -76,7 +76,9 @@ Set-Location $dir
 $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 $prompt = Get-Content -Raw -Encoding UTF8 "$dir\prompt.txt"
 "START $(Get-Date -Format o)" | Out-File -Encoding utf8 "$dir\status.txt"
-& "$env:USERPROFILE\.local\bin\claude.exe" -p $prompt --permission-mode bypassPermissions --output-format stream-json --verbose *> "$dir\run.log"
+# 프롬프트는 표준입력으로 (PowerShell 5는 인자 속 큰따옴표를 이스케이프하지 않아 인자가 쪼개진다)
+$OutputEncoding = New-Object System.Text.UTF8Encoding $false
+$prompt | & "$env:USERPROFILE\.local\bin\claude.exe" -p --permission-mode bypassPermissions --output-format stream-json --verbose *> "$dir\run.log"
 "END $(Get-Date -Format o) exit=$LASTEXITCODE" | Out-File -Append -Encoding utf8 "$dir\status.txt"
 """
 

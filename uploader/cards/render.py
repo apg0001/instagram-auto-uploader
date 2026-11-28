@@ -105,6 +105,28 @@ LAYOUT_CHECK = """() => {
 }"""
 
 
+# 원고의 `명령어` 를 코드 모양으로 (백틱이 글자 그대로 찍히지 않게). 줄 맞춤(fit) 전에 돌린다.
+CODE_JS = """() => {
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT), nodes = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode())
+    if (/`[^`]+`/.test(n.textContent) && !n.parentElement.closest('script, style, code')) nodes.push(n);
+  for (const n of nodes) {
+    const frag = document.createDocumentFragment();
+    n.textContent.split(/(`[^`]+`)/).forEach(part => {
+      if (/^`[^`]+`$/.test(part)) {
+        const c = document.createElement('code');
+        c.textContent = part.slice(1, -1);
+        c.style.cssText = 'font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.88em;'
+          + 'padding:.08em .35em;border-radius:.3em;background:rgba(127,127,127,.16);word-break:normal;overflow-wrap:anywhere;';
+        frag.appendChild(c);
+      } else if (part) frag.appendChild(document.createTextNode(part));
+    });
+    n.replaceWith(frag);
+  }
+  return nodes.length;
+}"""
+
+
 def check_layout(page: Any, name: str, i: int) -> dict[str, list[str]]:
     res = page.evaluate(LAYOUT_CHECK)
     if res["hidden"]:
@@ -131,6 +153,7 @@ def render(slides: list[tuple[str, dict[str, Any]]], out_dir: Path, prefix: str 
             src = Path(tmp) / f"{i}.html"
             src.write_text(html, encoding="utf-8")
             page.goto(src.as_uri())
+            page.evaluate(CODE_JS)
             # 웹폰트가 다 뜬 뒤 다시 맞춘다 (글꼴에 따라 높이가 달라짐)
             zoom = page.evaluate("document.fonts.ready.then(() => { window.fit && window.fit(); return document.body.dataset.zoom; })")
             if zoom and float(zoom) <= 0.71:

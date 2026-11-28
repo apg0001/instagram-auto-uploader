@@ -94,3 +94,9 @@ def test_poll_launches_queued_job_when_idle(tmp_path, monkeypatch):
     monkeypatch.setattr(film, "launch", lambda j: j.update(state="running", started=time.time()))
     film.poll(pl)
     assert film.load(pl)[0]["state"] == "running"
+
+
+def test_run_ps1_passes_prompt_on_stdin():
+    # 인자로 넘기면 PowerShell 5가 큰따옴표를 이스케이프하지 않아 인자가 쪼개진다
+    assert "-p $prompt" not in film.RUN_PS1
+    assert "$prompt | &" in film.RUN_PS1 and "UTF8Encoding" in film.RUN_PS1
