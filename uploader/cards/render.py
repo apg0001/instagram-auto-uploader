@@ -117,7 +117,7 @@ CODE_JS = """() => {
         const c = document.createElement('code');
         c.textContent = part.slice(1, -1);
         c.style.cssText = 'font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.88em;'
-          + 'padding:.08em .35em;border-radius:.3em;background:rgba(127,127,127,.16);word-break:break-all;';
+          + 'padding:.08em .35em;border-radius:.3em;background:rgba(127,127,127,.16);word-break:normal;overflow-wrap:anywhere;';
         frag.appendChild(c);
       } else if (part) frag.appendChild(document.createTextNode(part));
     });
