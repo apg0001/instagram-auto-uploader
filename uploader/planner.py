@@ -131,7 +131,7 @@ PLAN_PROPS = {
     "횟수": {"number": {}},
     "만든 횟수": {"number": {}},
     "이어서": {"rich_text": {}},
-    "릴스": {"rich_text": {}},  # 예: "목 18:00" — 캐러셀 뒤 48시간 안의 이 시각에 같은 카드로 내레이션 릴스도
+    "릴스": {"rich_text": {}},  # "목 18:00": 캐러셀 뒤 48시간 안의 이 시각에 같은 카드로 릴스도 / "대신": 캐러셀 없이 릴스만
     "오류": {"rich_text": {}},
 }
 RENAMED = {"시각": "게시 시각", "다음 생성": "다음 게시"}  # 예전 이름 → 새 이름 (setup_dashboard가 바꿈)
@@ -353,8 +353,14 @@ def generate_for(pl: Pipeline, pr: dict, at: datetime | None) -> None:
         pl.generate_whatif(brief_for(pl, pr), ts)
     else:
         topic = themes.from_ko(prop_text(pr, "주제")) or "tech"
+        rule = prop_text(pr, "릴스").strip()
+        only = rule in REEL_ONLY
         pl.generate_topic(brief_for(pl, pr), source=f"plan-{topic}", topic_theme=topic, title=prop_text(pr, "이름"),
-                          scheduled_at=ts, reel_at=reel_time(prop_text(pr, "릴스"), at or datetime.now(pl.tz)))
+                          scheduled_at=ts, reel_at=None if only else reel_time(rule, at or datetime.now(pl.tz)),
+                          reel_only=only)
+
+
+REEL_ONLY = ("대신", "릴스만")  # '릴스' 칸이 이거면 캐러셀 없이 게시 시각에 릴스만
 
 
 def reel_time(rule: str, after: datetime, within_h: float = 48) -> float | None:
