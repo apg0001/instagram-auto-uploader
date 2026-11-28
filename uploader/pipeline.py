@@ -480,9 +480,11 @@ class Pipeline:
 
     def generate_topic(self, topic: str, design: str = "template", source: str = "topic",
                        topic_theme: str | None = None, title: str | None = None,
-                       scheduled_at: float | None = None, reel_at: float | None = None) -> Post:
+                       scheduled_at: float | None = None, reel_at: float | None = None,
+                       reel_only: bool = False) -> Post | None:
         """요청형: 주제를 조사해 카드뉴스 초안을 만든다. 노션 기획 DB에서는 source=plan-<주제>.
-        reel_at 이 있으면 같은 카드로 내레이션 릴스도 만들어 그 시각에 예약한다 (실패해도 캐러셀은 남김)."""
+        reel_at 이 있으면 같은 카드로 내레이션 릴스도 만들어 그 시각에 예약한다 (실패해도 캐러셀은 남김).
+        reel_only 면 카드는 릴스 재료로만 쓰고 캐러셀 없이 scheduled_at 에 릴스만 (영상이면 나중에 초안이 생겨 None)."""
         from . import custom
 
         theme = topic_theme or themes.topic_of(source)
@@ -491,25 +493,33 @@ class Pipeline:
                                            kicker=title, topic_key=theme)
         kind = "CAROUSEL" if len(media) > 1 else "IMAGE"
         head = f"[{title}]" if title else "[주제]"
+        if reel_only and len(media) > 1:
+            return self._reel_from_cards(content, media, source, title or "카드뉴스", theme, scheduled_at or time.time(),
+                                         raise_on_fail=True)
         post = self._finalize(pid, source, kind, f"{head} {content.get('title', topic[:40])}", content["caption"], media,
                               ["image"] * len(media),
                               meta={"check": "none", "topic": topic, "design": design, "topic_theme": theme},
                               scheduled_at=scheduled_at)
-        if reel_at and len(media) > 1 and (self.cfg.raw.get("film") or {}).get("enabled"):
-            from . import film
-            try:  # 윈도우 PC에서 영상으로 (끝나면 plan이 초안으로 올린다). 못 하면 아래 카드 릴스로
-                film.start(self, content, media, source, title or "카드뉴스", theme, reel_at)
-                reel_at = None
-            except Exception as e:  # noqa: BLE001
-                log.warning("영상 릴스 시작 실패 → 카드 릴스: %s", e)
-                self.record_failure(f"{source}:film", e)
         if reel_at and len(media) > 1:
             try:
-                self.generate_slide_reel(content, media, source, title or "카드뉴스", theme, reel_at)
+                self._reel_from_cards(content, media, source, title or "카드뉴스", theme, reel_at)
             except Exception as e:  # noqa: BLE001 — 릴스가 실패해도 캐러셀은 그대로 올라간다
                 log.exception("카드뉴스 릴스 실패")
                 self.record_failure(f"{source}:reel", e)
         return post
+
+    def _reel_from_cards(self, content: dict, media: list[Path], source: str, title: str, theme: str, reel_at: float,
+                         raise_on_fail: bool = False) -> Post | None:
+        """윈도우 PC 영상으로 시작(끝나면 plan이 초안으로 올리므로 None). 못 하면 카드 릴스를 바로 만든다."""
+        if (self.cfg.raw.get("film") or {}).get("enabled"):
+            from . import film
+            try:
+                film.start(self, content, media, source, title, theme, reel_at)
+                return None
+            except Exception as e:  # noqa: BLE001
+                log.warning("영상 릴스 시작 실패 → 카드 릴스: %s", e)
+                self.record_failure(f"{source}:film", e)
+        return self.generate_slide_reel(content, media, source, title, theme, reel_at)
 
     def generate_slide_reel(self, content: dict, cards: list[Path], source: str, title: str, theme: str,
                             scheduled_at: float | None = None) -> Post:
