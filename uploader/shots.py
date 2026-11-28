@@ -188,7 +188,7 @@ def insert(content: dict[str, Any], media: list[Path], out_dir: Path, topic: str
         if not pic:
             continue
         host = urlparse(s["url"]).hostname or ""
-        f = slide([pic], str(s.get("head") or "직접 열어 본 화면"), str(s.get("caption") or ""), topic,
+        f = slide([pic], str(s.get("head") or "직접 열어 본 화면").replace("`", ""), str(s.get("caption") or "").replace("`", ""), topic,
                   out_dir / f"shot{i}.jpg", source=host + urlparse(s["url"]).path[:50])
         try:
             after = int(s.get("after") or len(media))
